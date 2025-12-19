@@ -1,0 +1,1453 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AFROLOG - Évaluation Logistique (Scoring Détaillé)</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#007bff">
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
+</script>
+    <style>
+        :root {
+            --primary-blue: #007bff;
+            --light-gray: #f8f9fa;
+            --dark-text: #343a40;
+            --medium-gray: #6c757d;
+            --secondary-color: #dc3545;
+            --tertiary-color: #0dcaf0;
+        }
+
+        body { background-color: var(--light-gray); font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; }
+        .app-container { width: 100%; max-width: 100%; min-height: 100vh; background-color: white; padding-top: 50px; }
+        .app-title { text-align: center; color: var(--dark-text); font-size: 1.5em; padding: 15px 0; margin: 0; }
+	.app-title .highlight {
+    color: var(--secondary-color); /* Utilise le rouge déjà défini dans vos variables (:root) */
+}
+
+        .navbar { display: flex; justify-content: space-around; border-bottom: 1px solid #dee2e6; background-color: white; position: sticky; top: 0; z-index: 10; }
+        .nav-item { padding: 15px 10px; text-decoration: none; color: var(--medium-gray); font-size: 0.9em; font-weight: 500; text-align: center; flex-grow: 1; cursor: pointer; }
+        .nav-item.active { color: var(--dark-text); font-weight: bold; border-bottom: 3px solid var(--primary-blue); }
+
+        .content-section { padding: 30px 20px; display: none; min-height: calc(100vh - 70px); }
+        .content-section.active-content { display: block; }
+
+        /* Styles Rapport */
+        .score-display-card { text-align: center; padding: 30px; background: #f0f7ff; border-radius: 15px; margin-bottom: 25px; border: 2px solid var(--primary-blue); }
+        .global-percentage { font-size: 3.5em; font-weight: 900; color: var(--primary-blue); margin: 0; }
+        .result-table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+        .result-table th, .result-table td { padding: 12px; border: 1px solid #dee2e6; text-align: left; }
+        .result-table th { background-color: #f8f9fa; color: var(--dark-text); }
+
+        .cta-button { width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 8px; font-size: 1.1em; font-weight: 600; cursor: pointer; transition: 0.3s; }
+        .primary { background-color: var(--primary-blue); color: white; }
+        .secondary { background-color: var(--medium-gray); color: white; }
+
+        .sector-button { display: flex; align-items: center; width: 100%; padding: 15px; margin-bottom: 8px; border: 1px solid #dee2e6; border-radius: 8px; background: #fff; cursor: pointer; }
+        .item-number { background: var(--primary-blue); color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; justify-content: center; align-items: center; margin-right: 15px; flex-shrink: 0; }
+        
+        .question-group { padding: 15px; border: 1px solid #ddd; border-radius: 8px; margin-top: 15px; background: white; }
+        .question-group label { display: block; margin-bottom: 10px; font-weight: 600; color: var(--dark-text); }
+        .question-group select { width: 100%; padding: 12px; border-radius: 5px; border: 1px solid #ccc; background: #fff; }
+
+        @media (min-width: 768px) {
+            .app-container { max-width: 700px; margin: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding-top: 0; }
+        }
+
+        @media print {
+            .navbar, .cta-button, .back-button { display: none !important; }
+            .content-section { display: block !important; padding: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <h1 class="app-title">AFR<span class="highlight">OLO</span>G</h1>
+
+        <header class="navbar">
+            <div class="nav-item active" onclick="switchContent('home-content', this)">ACCUEIL</div>
+            <div class="nav-item" onclick="switchContent('sectors-content', this)">AUDIT</div>
+            <div class="nav-item" onclick="switchContent('audit-content', this)">RÉSULTATS</div>
+        </header>
+
+        <main class="content-section active-content" id="home-content">
+            <h2 class="welcome-title" style="text-align:center;">Bienvenue !</h2>
+            <p class="description-text" style="text-align:center;">Évaluez la maturité de votre logistique en identifiant les pistes d'améliorations.</p>
+            <button class="cta-button primary" onclick="switchContent('sectors-content')">Démarrer un nouvel Audit</button>
+        </main>
+
+        <section class="content-section" id="sectors-content">
+            <h2 class="section-title">Secteurs à Auditer</h2>
+            <div id="main-sectors-list"></div>
+        </section>
+
+        <section class="content-section" id="sub-sectors-content">
+            <h2 class="section-title sub-sectors-title" id="parent-sector-title" style="color:var(--primary-blue);"></h2>
+            <div id="sub-sector-list"></div>
+            <button class="cta-button secondary" onclick="switchContent('sectors-content')">Retour aux secteurs</button>
+        </section>
+
+        <section class="content-section" id="scoring-form-page">
+            <form id="active-scoring-form">
+                <h2 class="section-title">Évaluation : <span id="current-sub-sector-name" style="color:var(--tertiary-color);"></span></h2>
+                <div id="questions-container"></div>
+                <button type="submit" class="cta-button primary">Valider ce secteur</button>
+            </form>
+            <button class="cta-button secondary" onclick="switchContent('sub-sectors-content')">Annuler</button>
+        </section>
+
+        <section class="content-section" id="audit-content">
+            <h2 class="section-title">Rapport de Maturité</h2>
+            <div id="final-results-area">
+                <p style="text-align:center; color:#888;">Complétez les évaluations pour voir vos scores ici.</p>
+            </div>
+            <div class="audit-cta-buttons">
+                <button class="cta-button primary" onclick="window.print()">
+                    <i class="fas fa-file-pdf"></i> Exporter en PDF
+                </button>
+                <button class="cta-button secondary" onclick="location.reload()">Réinitialiser l'audit</button>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // --- DONNÉES ---
+        const auditResultsData = [
+            { id: 1, section: "Management, Stratégie et Planification" }, 
+            { id: 2, section: "Conception et Projets" },
+            { id: 3, section: "Approvisionner" },
+            { id: 4, section: "Produire" },
+            { id: 5, section: "Déplacer" },
+            { id: 6, section: "Stocker" },
+            { id: 7, section: "Vendre" },
+            { id: 8, section: "Retours et Après-vente" },
+            { id: 9, section: "Indicateurs de pilotage" },
+            { id: 10, section: "Progrès Permanent" }
+        ];
+
+        const subSectorsData = [
+            { id: 101, parentId: 1, name: "MANAGEMENT ET STRATÉGIE", description: "Objectifs de performance et position géographique." },
+            { id: 102, parentId: 1, name: "LES FLUX FINANCIERS", description: "Le suivi de la performance logistique." },
+	{id: 103, parentId: 1, name:"FLUX DES INFORMATIONS", description:"système d'information et traçabilité."},
+	    { id: 201, parentId: 2, name: "CONCEPTION, INDUSTRIALISATION, LES PROCEDURES", description: "Regroupe la gestion des projets de développement, la standardisation et les procédures." },
+
+	    { id: 301, parentId: 3, name: "LA GESTION DES APPROVISIONNEMENTS",  description: "Organisation et moyens de la fonction achat, délais et qualité des approvisionnements." },
+            { id: 302, parentId: 3, name: "LA GESTION DES RELATIONS FOURNISSEURS", description: "Sélection, évaluation, et collaboration avec les fournisseurs." },
+            { id: 303, parentId: 3, name: "LE PILOTAGE DES COMMANDES FOURNISSEURS",  description: "Le processus de la commande fournisseur et le suivi des livraisons." },
+            { id: 304, parentId: 3, name: "LES RESSOURCES EXTERNES ET LES ACHATS",  description: "Externalisation, achats de transport, et autres services logistiques." },
+            { id: 401, parentId: 4, name: "LA PRODUCTION",  description: "Optimisation des implantations, ordonnancement, flexibilité et fiabilité des flux." },
+            { id: 501, parentId: 5, name: "LES FLUX PHYSIQUES ET LA DISTRIBUTION",  description: "Sélection des transporteurs, planification de la distribution et maîtrise des opérations de transport." },
+	 { id: 601, parentId: 6, name: "LA GESTION DES STOCKS ET MAGASINS", description: "Organisation physique, fiabilité, gestion des stocks PF et externes." },
+	 
+    	    { id: 701, parentId: 7, name: "RELATION CLIENT ET OFFRE LOGISTIQUE",  description: "Définition de l'offre, emballages, communication et gestion du crédit client." },
+  	    { id: 702, parentId: 7, name: "GESTION DES COMMANDES CLIENT", description: "Prise de commande, délais, gestion de la pénurie et suivi d'avancement." },
+    	    { id: 703, parentId: 7, name: "PRÉPARATION ET DISTRIBUTION",  description: "Programmation des opérations, gestion de la charge et processus de préparation." },
+    	    { id: 704, parentId: 7, name: "PERFORMANCE ET NON-CONFORMITÉS",  description: "Objectifs de livraison, mesure de la satisfaction et traitement des dysfonctionnements." },
+	    { id: 801, parentId: 8, name: "LE SOUTIEN À LA VENTE ET SAV", description: "Maintenance, SAV et gestion du cycle de vie du produit." },
+    { id: 802, parentId: 8, name: "LA GESTION DES RETOURS (Reverse Logistics)", description: "Flux physiques retours, tris, recyclage et destructions." },
+
+	    //Secteur 9:INDICATEURS DE PILOTAGE
+	    { id: 901, parentId: 9, name: "TABLEAUX DE BORD ET PILOTAGE", description: "Mesure de la performance des flux, tableaux de bord pyramidaux et pilotage Supply Chain." 
+},
+	//Secteur 10:PROGRES PERMANENT
+	{id: 1001, parentId: 10, name: "DEMARCHE DE PROGRES PERMANENT",  description: "Conduite du progrès, certifications Qualité/Environnement et pilotage du plan de progrès."}
+
+
+        ];
+
+        const scoringQuestions = {
+            101: [ 
+                // LES OBJECTIFS DE LA PERFORMANCE LOGISTIQUE
+                { id: 'Q1.1.1', label: "Comment l'entreprise a-t-elle choisi de faire auditer sa logistique ?", sub_part: "LES OBJECTIFS DE LA PERFORMANCE LOGISTIQUE", options: [{ value: 0, text: "0 point : Aucune démarche d'audit n'est formalisée." },
+			{ value: 1, text: "1 point : Des audits sont planifiés..." },
+			{ value: 2, text: "2 points : L'efficacité des actions qui découlent des audits est mesurée..." },
+			{ value: 3, text: "3 points : Cherchant à aller au-delà de la maîtrise d'une démarche interne, la DG a validé le principe d'un audit externe." }]},
+                { id: 'Q1.1.2', label: "Quels sont les audits sur la logistique pratiqués dans l'entreprise ?", sub_part: "LES OBJECTIFS DE LA PERFORMANCE LOGISTIQUE", options: [{ value: 0, text: "0 point : Aucun audit spécifique à la logistique n'est pratiqué." }, { value: 1, text: "1 point : Des inspections formalisées évaluent la bonne application des procédures..." }, { value: 2, text: "2 points : L'entreprise organise des audits internes logistiques dont les conclusions sont portées à la connaissance de tous les services..." }, { value: 3, text: "3 points : Des audits externes réalisés régulièrement par les clients... complètent les audits internes." }]},
+                { id: 'Q1.1.3', label: "Comment la logistique est-elle intégrée dans l'élaboration de la stratégie ?", sub_part: "LES OBJECTIFS DE LA PERFORMANCE LOGISTIQUE", options: [{ value: 0, text: "0 point : Les décisions stratégiques sont prises sans considération formelle des impacts logistiques." }, { value: 1, text: "1 point : Les principaux indicateurs de performance logistique et les postes de coûts logistiques sont identifiés et intégrés dans les objectifs budgétaires." }, { value: 2, text: "2 points : Outre l'impact des coûts logistiques, les éléments du service apporté aux clients sont intégrés..." }, { value: 3, text: "3 points : Pour les grandes décisions que doit prendre l'entreprise, une étude de leurs conséquences logistiques est systématiquement menée avec soin." }]},
+                { id: 'Q1.1.4', label: "Comment la composante logistique de la stratégie s'adapte-t-elle aux catégories de produits, de services et de clients ?", sub_part: "LES OBJECTIFS DE LA PERFORMANCE LOGISTIQUE", options: [{ value: 0, text: "0 point : Aucune distinction n'est faite entre les catégories de produits/clients dans la stratégie logistique." }, { value: 1, text: "1 point : Des règles de priorité existent pour les produits et les clients, concernant les éléments principaux de performance : délais, service, coûts." }, { value: 2, text: "2 points : Des catégories ont été définies en fonction de critères précis dont la pertinence est établie. Des règles de gestion et des objectifs sont instaurés pour chaque catégorie." }, { value: 3, text: "3 points : Les catégories des produits et des services sont définies dans les contrats et gérées en commun avec les partenaires, les clients et les fournisseurs toutes les fois que cela est possible." }]},
+                { id: 'Q1.1.5', label: "Comment les besoins des clients déterminent-ils la logistique de l'entreprise ?", sub_part: "LES OBJECTIFS DE LA PERFORMANCE LOGISTIQUE", options: [{ value: 0, text: "0 point : La logistique est gérée de manière interne sans consultation des besoins clients." }, { value: 1, text: "1 point : Les dysfonctionnements logistiques sont traités au coup par coup, sans délai. Tout écart est mesuré." }, { value: 2, text: "2 points : Les clients interviennent dans les orientations logistiques de l'entreprise." }, { value: 3, text: "3 points : Des actions préventives et enquêtes de satisfaction sont réalisées. Les résultats de ces enquêtes peuvent donner lieu à des actions priorisées et pilotées par la Direction Générale." }]},
+                { id: 'Q1.1.6', label: "Comment la démarche logistique a-t-elle été intégrée au sein de l'entreprise ?", sub_part: "LES OBJECTIFS DE LA PERFORMANCE LOGISTIQUE", options: [{ value: 0, text: "0 point : La démarche logistique est limitée à des fonctions isolées." }, { value: 1, text: "1 point : Les processus sont identifiés, transversaux, et reconnus par tous les niveaux de l'organisation." }, { value: 2, text: "2 points : Les dysfonctionnements sont analysés et traités par des équipes transfonctionnelles." }, { value: 3, text: "3 points : La remise en cause permanente, basée sur la collecte de données exogènes est une pratique courante." }]},
+                { id: 'Q1.1.7', label: "Comment a été choisie l'organisation de la logistique au sein de l'entreprise ?", sub_part: "LES OBJECTIFS DE LA PERFORMANCE LOGISTIQUE", options: [{ value: 0, text: "0 point : L'organisation logistique est fragmentée et sans coordination centrale." }, { value: 1, text: "1 point : Les choix en matière d'organisation logistique sont le reflet d'une préoccupation permanente du client et de sa capacité à générer du profit." }, { value: 2, text: "2 points : L'organisation en place regroupe sous un « Directeur Logistique » l'ensemble des responsabilités concernant la planification, les approvisionnements, et la distribution..." }, { value: 3, text: "3 points : Au-delà, ce choix d'organisation confère à la Direction Logistique les pouvoirs transversaux les plus étendus sur les éléments de l'organisation sur lesquels elle n'exerce pas de contrôle hiérarchique." }]},
+                { id: 'Q1.1.8', label: "Comment les responsabilités logistiques sont-elles réparties dans l'entreprise ?", sub_part: "LES OBJECTIFS DE LA PERFORMANCE LOGISTIQUE", options: [{ value: 0, text: "0 point : Les responsabilités logistiques sont vagues et se chevauchent." }, { value: 1, text: "1 point : Les domaines de responsabilité sont clairement définis en matière d'administration commerciale, d'approvisionnement, de planification, etc." }, { value: 2, text: "2 points : En charge de tout ou partie d'une des fonctions opérationnelles ci-dessus, le Responsable Logistique assume un rôle d'interface entre les différents services de l'entreprise..." }, { value: 3, text: "3 points : Sous l'impulsion et le contrôle d'une autorité placée au plus haut niveau, un membre de l'équipe de direction ou du comité stratégique est Directeur Logistique." }]},
+                { id: 'Q1.1.9', label: "Comment les objectifs logistiques sont-ils fixés ?", sub_part: "LES OBJECTIFS DE LA PERFORMANCE LOGISTIQUE", options: [{ value: 0, text: "0 point : Les objectifs sont fixés unilatéralement sans concertation." }, { value: 1, text: "1 point : Les propositions d’objectifs logistiques sont définis par chaque responsable assisté de ses collaborateurs." }, { value: 2, text: "2 points : La définition des objectifs de chacun des membres de l’équipe logistique est élaborée en cascade à partir des objectifs généraux de l’entreprise. Le service commercial participe à la définition des objectifs de service." }, { value: 3, text: "3 points : La mise au point des objectifs logistiques fait l’objet d’allers et retours multiples afin que chaque objectif soit cohérent et réaliste. Des informations sur les sites analogues et/ou sur la concurrence existent et sont utilisées pour fixer les objectifs." }]},
+                { id: 'Q1.1.10', label: "Comment est garantie l’information sur la performance logistique ?", sub_part: "LES OBJECTIFS DE LA PERFORMANCE LOGISTIQUE", options: [{ value: 0, text: "0 point : La performance logistique n'est pas mesurée de manière formalisée." }, { value: 1, text: "1 point : Les objectifs logistiques sont considérés, pris en compte et mesurés, comme les objectifs financiers, les objectifs sociaux ou les objectifs qualité." }, { value: 2, text: "2 points : Le système d’information et les procédures utilisées permettent de garantir la fiabilité des indicateurs de façon objective et indépendante." }, { value: 3, text: "3 points : La fiabilité des indicateurs de performance logistique est également vérifiée auprès des clients et des fournisseurs, qui sont informés régulièrement des indicateurs les concernant." }]},
+                
+                // LA POSITION GÉOGRAPHIQUE
+                { id: 'Q1.1.11', label: "Comment sont choisis les lieux de localisation de la production ?", sub_part: "LA POSITION GÉOGRAPHIQUE", options: [{ value: 0, text: "0 point : Le choix est fait sans tenir compte des contraintes logistiques (transport, douanes, etc.)." }, { value: 1, text: "1 point : Les lieux de production sont choisis en tenant compte explicitement de l’éloignement, de la facilité et des coûts de transport, des délais douaniers, de la qualification du personnel..." }, { value: 2, text: "2 points : Les éléments clés du service sont fixés : délai de livraison, objectif de taux de service, stocks, etc. La position géographique des sites est étudiée en vue d’optimiser le service et la rentabilité." }, { value: 3, text: "3 points : Un plan complet est établi. Il prévoit : le nombre et la localisation des sites, l’organisation du transport... Les éléments concernant l'environnement général, les infrastructures, la réglementation, etc., sont connus et réellement pris en compte." }]},
+                { id: 'Q1.1.12', label: "Comment choisit-on les lieux d’implantation des entités de distribution ou des partenaires qui en assurent la fonction ?", sub_part: "LA POSITION GÉOGRAPHIQUE", options: [{ value: 0, text: "0 point : Les lieux sont choisis uniquement sur des critères de coût immobilier sans analyse logistique." }, { value: 1, text: "1 point : Les lieux de distribution sont choisis en tenant compte explicitement de l’éloignement, de la facilité de transport, des délais douaniers, afin d'obtenir la qualité de service et les délais voulus." }, { value: 2, text: "2 points : Les éléments clés du service sont fixés : délai de livraison, objectif de taux de service, stocks. La configuration des sites est étudiée en vue d’optimiser le service et la rentabilité." }, { value: 3, text: "3 points : Un plan complet est établi. Il prévoit : le nombre et la localisation des sites, l’organisation du transport, avec des possibilités alternatives d’affectation." }]}
+            ],
+
+            102: [
+    {id: "Q1.2.1",
+        label: "Comment est travaillée la programmation des investissements logistiques ?",
+        sub_part: "LE SUIVI DE LA PERFORMANCE LOGISTIQUE",
+        options: [
+            { value: 1, text: "1 point : Les investissements logistiques sont planifiés à court, moyen et long terme et clairement identifiés." },
+            { value: 2, text: "2 points : Les projets sont étudiés avec un calcul complet du retour sur investissement intégrant tous les paramètres financiers." },
+            { value: 3, text: "3 points : Des post-audits sont réalisés après mise en place pour vérifier la pertinence des hypothèses initiales." }]
+ },
+
+    {id: "Q1.2.2",
+        label: "Comment les arbitrages entre investir et sous-traiter sont-ils rendus ?",
+        sub_part: "LE SUIVI DE LA PERFORMANCE LOGISTIQUE",
+        options: [
+            { value: 1, text: "1 point : Les données de charge, coût, service et délai sont disponibles et les ressources saturées sont traitées." },
+            { value: 2, text: "2 points : Les arbitrages sont réalisés sans dégrader les délais de livraison vers les clients." },
+            { value: 3, text: "3 points : La révision de la planification est plus fréquente et le nombre de ressources saturées diminue." }]
+    },
+    {id: "Q1.2.3",
+        label: "Comment sont travaillés les coûts logistiques ?",
+        sub_part: "LE SUIVI DE LA PERFORMANCE LOGISTIQUE",
+        options: [
+            { value: 1, text: "1 point : Les coûts de manutention, transport, stockage et administration sont évalués au moins annuellement." },
+            { value: 2, text: "2 points : Des objectifs d’amélioration sont fixés et suivis avec des actions correctives en cas de dérive." },
+            { value: 3, text: "3 points : Un plan d’amélioration est mis en œuvre et les coûts de la concurrence sont pris en compte." }]
+    },
+    {id: "Q1.2.4",
+        label: "Comment est travaillée la rotation du capital immobilisé dans les stocks ?",
+        sub_part: "LE SUIVI DE LA PERFORMANCE LOGISTIQUE",
+        options: [
+            { value: 1, text: "1 point : Un plan de gestion du capital immobilisé existe avec indicateurs et objectifs définis." },
+            { value: 2, text: "2 points : Des actions identifiées réduisent l’immobilisation du capital et leurs effets sont mesurés." },
+            { value: 3, text: "3 points : Des analyses comparatives sont réalisées et la notion de cash-to-cash est maîtrisée." }]
+    },
+
+      {id: "Q1.2.5",
+        label: "Comment est organisé le reporting financier et budgétaire des dépenses logistiques ?",
+        sub_part: "LE SUIVI DE LA PERFORMANCE LOGISTIQUE",
+        options: [
+            { value: 1, text: "1 point : Un système de contrôle budgétaire des charges logistiques est en place et diffusé régulièrement." },
+            { value: 2, text: "2 points : Des actions permettent de contenir les dépenses et leurs effets sont visibles sur des indicateurs." },
+            { value: 3, text: "3 points : Des ratios garantissent une baisse continue des coûts à service constant." }
+        ]
+    },
+    {
+        id: "Q1.2.6",
+        label: "Quelles sont les pratiques de l’entreprise en matière de gestion des risques ?",
+        sub_part: "LE SUIVI DE LA PERFORMANCE LOGISTIQUE",
+        options: [
+            { value: 1, text: "1 point : Les risques sont identifiés et des dispositions d’assurance et procédures existent." },
+            { value: 2, text: "2 points : Une approche logistique des risques est étudiée avec des procédures en mode dégradé." },
+            { value: 3, text: "3 points : Les procédures sont améliorées en continu et les pratiques concurrentes sont connues." }]}
+],
+                       103: [
+                // FLUX D'INFORMATION 1.3.1 - LE SYSTEME D'INFORMATION LOGISTIQUE (Industriel)
+                { 
+                    id: 'Q1.3.1', 
+                    label: "Quel est le système d'information logistique industrielle utilisé ?", 
+                    sub_part: "LE SYSTEME D'INFORMATION LOGISTIQUE (Industriel)", 
+                    options: [
+                        { value: 0, text: "0 point : Aucun système formalisé ou utilisé seulement pour un suivi a posteriori." }, 
+                        { value: 1, text: "1 point : Le SIL industriel est installé pour connaître les stocks/mouvements, gérer les appels de livraison et lancer les ordres de fabrication/approvisionnement (vérification des stocks, règles de décalage/groupage). Manuel, procédures et formation sont disponibles." }, 
+                        { value: 2, text: "2 points : Le système permet en outre de : mesurer le niveau de service, calculer la charge/ressources, calculer des délais de disponibilité (planification à capacité finie). Les responsabilités de mise à jour des données (nomenclatures, paramètres de gestion) sont définies et documentées. Si Kanban est en place, les règles sont documentées." }, 
+                        { value: 3, text: "3 points : Ce système est un sous-système d'un système plus global (ERP) permettant de répondre aux interrogations stratégiques de l'entreprise. Sa conception permet un interfaçage et un paramétrage aisés dans un environnement contrôlé." }
+                    ]
+                },
+			
+                
+                // FLUX D'INFORMATION 1.3.2 - LE SYSTEME D'INFORMATION LOGISTIQUE (Flux Aval)
+                { 
+                    id: 'Q1.3.2', 
+                    label: "Quel est le système d'information logistique utilisé sur le flux aval ?", 
+                    sub_part: "LE SYSTEME D'INFORMATION LOGISTIQUE (Distribution)", 
+                    options: [
+                        { value: 0, text: "0 point : Les stocks et mouvements du flux aval ne sont pas gérés par un SI formel." }, 
+                        { value: 1, text: "1 point : Un SI de gestion logistique (WMS/Distribution) est installé pour connaître les stocks/mouvements en temps réel ou quasi-réel, gérer et lancer les ordres de préparation et de livraison (vérification des stocks, règles de groupage). Manuel, procédures et formation sont disponibles." }, 
+                        { value: 2, text: "2 points : Le système permet en outre de : mesurer le niveau de service, calculer la charge/ressources, calculer des délais de disponibilité en fonction des capacités. Les responsabilités de mise à jour des données sont définies, documentées, et leur détermination est prévue." }, 
+                        { value: 3, text: "3 points : Ce système est un sous-système d'un système plus global (ERP) permettant de répondre aux interrogations stratégiques de l'entreprise. Sa conception permet un interfaçage et un paramétrage aisés dans un environnement contrôlé." }
+                    ]
+                },
+                
+                // FLUX D'INFORMATION 1.3.3 - LA LOGISTIQUE ET LES TIC (Externe)
+                { 
+                    id: 'Q1.3.3', 
+                    label: "Comment se comporte l'entreprise avec les différents modes de communication et de transfert d'informations (flux externe) ?", 
+                    sub_part: "LA LOGISTIQUE ET LES TECHNOLOGIES DE L'INFORMATION ET DE LA COMMUNICATION (Externe)", 
+                    options: [
+                        { value: 0, text: "0 point : La communication externe repose principalement sur des moyens traditionnels (téléphone, fax, courrier)." }, 
+                        { value: 1, text: "1 point : L'entreprise utilise le courrier électronique et dispose d'un site Internet accessible et à jour. Toutes les dispositions de sécurisation sont en place et mises à jour." }, 
+                        { value: 2, text: "2 points : L'entreprise utilise les technologies pour les relations journalières clients/fournisseurs. La transmission des commandes (clients et vers fournisseurs) utilise ces technologies de façon privilégiée (via le site Internet ou EDI)." }, 
+                        { value: 3, text: "3 points : L'entreprise a mis en place les outils permettant de connecter son site avec son SI principal. Transmission immédiate des ordres clients et répercussion immédiate vers les fournisseurs (EDI/Web Services). La gestion partagée des approvisionnements est au moins partiellement en place." }
+                    ]
+                },
+                
+                // FLUX D'INFORMATION 1.3.4 - LA LOGISTIQUE ET LES TIC (Interne)
+                { 
+                    id: 'Q1.3.4', 
+                    label: "Comment l'entreprise utilise-t-elle en interne la communication électronique et le partage d'information ?", 
+                    sub_part: "LA LOGISTIQUE ET LES TECHNOLOGIES DE L'INFORMATION ET DE LA COMMUNICATION (Interne)", 
+                    options: [
+                        { value: 0, text: "0 point : Le partage d'information interne repose sur des documents physiques ou des systèmes non connectés." }, 
+                        { value: 1, text: "1 point : L'entreprise utilise le courrier électronique interne et dispose d'un Intranet. Toutes les dispositions de sécurisation sont en place." }, 
+                        { value: 2, text: "2 points : La gestion des rendez-vous, réunions, etc., est commune à toute l'entreprise (calendrier partagé, planification efficace)." }, 
+                        { value: 3, text: "3 points : Outils adaptés à l'interconnexion de ses différents sites (multi-sites) et dispose d'un Extranet sécurisé. Un système d'indicateurs logistiques en ligne est disponible. Mutualisation de la circulation des informations logistiques (règles connues et documentées)." }
+                    ]
+                },
+                
+                // FLUX D'INFORMATION 1.3.5 - LES DONNEES LOGISTIQUES (Fiabilité)
+                { 
+                    id: 'Q1.3.5', 
+                    label: "Comment est garantie la fiabilité des données techniques, des données clients et produits ?", 
+                    sub_part: "LES DONNEES LOGISTIQUES", 
+                    options: [
+                        { value: 0, text: "0 point : La fiabilité des données n'est pas mesurée ou documentée." }, 
+                        { value: 1, text: "1 point : Un taux de fiabilité existe, une procédure fixe les conditions de sa mesure, des indicateurs sont publiés pour chacune de ces 3 grandes familles de données." }, 
+                        { value: 2, text: "2 points : Les anomalies sont traitées dès leur identification. L'analyse génère des actions correctives et de formation du personnel. Des dispositions de sécurité sont prises pour les aspects informatiques." }, 
+                        { value: 3, text: "3 points : Un plan d'amélioration est établi pour réduire les causes d'erreurs et garantir l'intégrité des bases de données. Le progrès est mesuré sur le long terme. Un benchmarking de la concurrence est utilisé pour fixer les objectifs." }
+                    ]
+                },
+                
+                // FLUX D'INFORMATION 1.3.6 - TRAÇABILITÉ (Commandes)
+                { 
+                    id: 'Q1.3.6', 
+                    label: "Comment se comporte l'entreprise pour assurer la traçabilité du flux d'information concernant les commandes (clients et fournisseurs) ?", 
+                    sub_part: "LA LOGISTIQUE ET LES TECHNOLOGIES DE L'INFORMATION ET DE LA COMMUNICATION (Traçabilité Commandes)", 
+                    options: [
+                        { value: 0, text: "0 point : La connaissance du statut d'une commande nécessite une intervention manuelle ou de multiples recherches." }, 
+                        { value: 1, text: "1 point : Un système de gestion des informations permet à tout moment de connaître le statut et l'état d'avancement d'une commande d'un client et respectivement d'un fournisseur." }, 
+                        { value: 2, text: "2 points : Tout événement qui empêcherait une commande d'être menée à bonne fin est immédiatement identifiable. Des actions peuvent être mises en place pour revenir au niveau de service attendu." }, 
+                        { value: 3, text: "3 points : Pour les défaillances et les non-conformités les plus sévères, des actions préventives sont décidées, appliquées ; leur efficacité est mesurée, le système d'information évolue en conséquence." }
+                    ]
+                },
+
+                // FLUX D'INFORMATION 1.3.7 - TRAÇABILITÉ (Flux Physiques)
+                { 
+                    id: 'Q1.3.7', 
+                    label: "Comment se comporte l'entreprise pour assurer la traçabilité de ses flux physiques (produits, composants, process) ?", 
+                    sub_part: "LA LOGISTIQUE ET LES TECHNOLOGIES DE L'INFORMATION ET DE LA COMMUNICATION (Traçabilité Flux Physiques)", 
+                    options: [
+                        { value: 0, text: "0 point : Aucune traçabilité formelle des produits ou composants au-delà de la réception/expédition." }, 
+                        { value: 1, text: "1 point : Lorsque cela est requis, tant pour le produit et ses composants, que pour le process, des moyens d'identification sont utilisés, et une procédure du système qualité de l'entreprise est en place." }, 
+                        { value: 2, text: "2 points : Toute défaillance ou non-conformité relative à l'application de cette procédure fait l'objet d'actions correctives, dont la mise en œuvre, le suivi et l'efficacité sont décrits dans le système qualité." }, 
+                        { value: 3, text: "3 points : Pour les défaillances et les non-conformités les plus sévères, des actions préventives sont décidées. Leur efficacité est mesurée, comme il est indiqué et pratiqué selon le système qualité de l'entreprise." }
+                    ]
+                },
+                
+                // FLUX D'INFORMATION 1.3.8 - OBJECTIFS DE PERFORMANCE (Prévisions)
+                { 
+                    id: 'Q1.3.8', 
+                    label: "Comment sont élaborées et suivies les prévisions de ventes ?", 
+                    sub_part: "LES OBJECTIFS DE LA PERFORMANCE LOGISTIQUE (Prévisions)", 
+                    options: [
+                        { value: 0, text: "0 point : Les prévisions de ventes sont basées sur l'intuition ou des données non structurées." }, 
+                        { value: 1, text: "1 point : Des prévisions de vente sont effectuées par familles de produits et par mois. Les principaux clients sont régulièrement sollicités pour leurs propres prévisions." }, 
+                        { value: 2, text: "2 points : Les prévisions sont mises à jour régulièrement et consolidées avec le carnet de commandes fermes. Elles sont discutées et critiquées en commun par les personnes concernées (S&OP). Le personnel est formé, et dispose de méthodes et modèles appropriés." }, 
+                        { value: 3, text: "3 points : Les taux de qualité des prévisions (accuracy) sont mesurés régulièrement. Des objectifs ont été fixés pour améliorer cette qualité." }
+                    ]
+                },
+                
+                // FLUX D'INFORMATION 1.3.9 - OBJECTIFS DE PERFORMANCE (Planification)
+                { 
+                    id: 'Q1.3.9', 
+                    label: "Quelles sont les pratiques de l'entreprise en matière de planification ?", 
+                    sub_part: "LES OBJECTIFS DE LA PERFORMANCE LOGISTIQUE (Planification)", 
+                    options: [
+                        { value: 0, text: "0 point : La planification est réalisée sans outils formels ou n'a qu'un horizon très court terme." }, 
+                        { value: 1, text: "1 point : L'entreprise construit sa planification en utilisant l'historique récent ou en intégrant le carnet de commandes fermes. Des outils adaptés et validés sont utilisés ; la planification est mise à jour et discutée à fréquence régulière (souvent chaque semaine)." }, 
+                        { value: 2, text: "2 points : Des informations d'origine commerciale permettent d'avoir une vision plus étendue sur le futur à moyen terme. Ces informations sont utilisées pour la construction du PDP, voire du PIC, ou du PDD et la construction budgétaire. Mise à jour et discussion à fréquence régulière (souvent chaque mois)." }, 
+                        { value: 3, text: "3 points : Des informations d'origine marketing (orientations/évaluations potentielles du marché) permettent une vue la plus large possible. Établissement d'un plan stratégique (business plan à 3 ou 5 ans). La pertinence du plan précédent est prise en compte pour améliorer le dispositif." }
+                    ]
+                },
+
+            ],
+	104: [
+                { id: 'Q1.4.1',
+                    label: "Comment est géré le personnel de façon générale ?",
+                    sub_part: "LE MANAGEMENT DES PERSONNELS LOGISTIQUES",
+                    options: [
+                        { value: 0, text: "0 point : La gestion du personnel logistique n'est pas spécifiquement formalisée." },
+                        { value: 1, text: "1 point : Le personnel est accueilli et formé, y compris le personnel temporaire. Les règles de sécurité, d'hygiène et d'environnement sont connues et appliquées avec rigueur." },
+                        { value: 2, text: "2 points : La polyvalence est évaluée et développée. Il est possible de modifier de façon rapide le temps d'ouverture des sites. Le programme de formation comprend une information aux objectifs de l'entreprise et à la qualité." },
+                        { value: 3, text: "3 points : Une analyse de charge prévisionnelle permet de connaître à l'avance et de façon fiable, les besoins en personnel logistique. Des actions préventives sont mises en place pour lisser la charge et réduire l'amplitude des écarts d'activité. Le personnel est motivé et participe au progrès." }
+                    ]
+                },
+                {id: 'Q1.4.2',
+                    label: "Comment est géré le personnel de manutention, de réception, de préparation, d'expédition et de réparation ?",
+                    sub_part: "LE MANAGEMENT DES PERSONNELS LOGISTIQUES",
+                    options: [
+                        { value: 0, text: "0 point : Les besoins de ces fonctions sont gérés au coup par coup." },
+                        { value: 1, text: "1 point : Un personnel en nombre suffisant est formé et habilité à la manutention des marchandises ainsi qu'aux tâches administratives associées. Les procédures de saisie sont connues et appliquées." },
+                        { value: 2, text: "2 points : Les besoins en personnel pour ces différentes catégories sont étudiés avec soin. Des mesures sont prévues pour faire face aux pics d'activité. La polyvalence est prévue ainsi qu'un dispositif de formation systématique." },
+                        { value: 3, text: "3 points : Les flux sont régulièrement étudiés pour améliorer l'efficacité dans tous les domaines. Les réceptions et expéditions sont planifiées pour en lisser la charge." }]
+                },
+                {id: 'Q1.4.3',
+                    label: "Quelle maîtrise exerce l'entreprise sur les délais, à travers la gestion des effectifs ?",
+                    sub_part: "LE MANAGEMENT DES PERSONNELS LOGISTIQUES",
+                    options: [
+                        { value: 0, text: "0 point : Le lien entre effectifs et délais n'est pas formalisé." },
+                        { value: 1, text: "1 point : Des ratios existent qui utilisent des unités d'œuvre reconnues pour permettre la détermination de l'effectif requis. Un suivi des performances générales et individuelles est réalisé." },
+                        { value: 2, text: "2 points : Le résultat de la performance est analysé. Des actions sont menées en cas de dérive. La formation du personnel, y compris celle du personnel temporaire, est assurée, ainsi que la polyvalence." },
+                        { value: 3, text: "3 points : À partir des résultats constatés, un plan d'amélioration a été défini et mis en œuvre. Des actions sont menées pour mieux apprécier la charge de travail et les moyens nécessaires ainsi que pour renforcer la flexibilité." }
+                    ]
+                },
+                {id: 'Q1.4.4', label: "Quelle est la culture et l'éthique de l'entreprise ?",
+                    sub_part: "LE MANAGEMENT DES PERSONNELS LOGISTIQUES",
+                    options: [
+                        { value: 0, text: "0 point : Les pratiques sont informelles ou non documentées." },
+                        { value: 1, text: "1 point : Les rapports humains sont basés sur le respect mutuel et les échanges d'expériences multiculturelles. La collaboration avec les tiers s'en trouve facilitée." },
+                        { value: 2, text: "2 points : Le travail en équipes autonomes développe la performance collective. La notion d'éthique d'entreprise est comprise de chacun. Cela est sans effet sur les aspects logistiques." },
+                        { value: 3, text: "3 points : L'entreprise utilise des modèles de management privilégiant l'excellence à travers l'implication des salariés (EFQM par exemple). Une charte sociale existe et est mise en application. L'entreprise se préoccupe des pratiques des entreprises remarquées en la matière." }]
+                },
+                {id: 'Q1.4.5',
+                    label: "Quelle est la politique de l'entreprise en matière de sécurité ?",
+                    sub_part: "LE MANAGEMENT DES PERSONNELS LOGISTIQUES",
+                    options: [
+                        { value: 0, text: "0 point : La sécurité est traitée uniquement en cas d'accident." },
+                        { value: 1, text: "1 point : L'engagement général de la Direction d'aller dans le sens de la prise en compte de ce critère de façon stratégique est clairement formalisé. Des indicateurs concrétisent les résultats obtenus et à atteindre." },
+                        { value: 2, text: "2 points : Le personnel logistique doit décliner les aspects spécifiques de la politique sécurité, sur la base de critères logistiques. Des indicateurs adaptés sont en place. Ils montrent le progrès en la matière." },
+                        { value: 3, text: "3 points : Des sous-groupes de personnels logistiques existent, et les critères de référence sont spécifiques à ces sous-groupes. Les pratiques de la concurrence en la matière sont connues et servent de référence." }
+                    ]
+                },
+                {id: 'Q1.4.6', label: "Quelle est la politique de l'entreprise en matière de conditions de travail ?",
+                    sub_part: "LE MANAGEMENT DES PERSONNELS LOGISTIQUES",
+              options: [
+                        { value: 0, text: "0 point : Les conditions de travail sont gérées sans politique formalisée." },
+                        { value: 1, text: "1 point : La Direction de l'entreprise a clairement formalisé son engagement de prendre ce critère en compte de façon stratégique. Des indicateurs concrétisent les résultats obtenus et à atteindre." },
+                        { value: 2, text: "2 points : Le personnel logistique doit décliner les aspects spécifiques de la politique en matière de conditions de travail, sur la base de critères logistiques. Des indicateurs adaptés sont en place qui montrent le progrès en la matière. Du personnel logistique est intégré dans les groupes de travail constitués dans l'entreprise sur ce sujet." },
+                        { value: 3, text: "3 points : Des sous-groupes de personnels logistiques existent et les critères de référence sont spécifiques à ces sous-groupes. Les pratiques de la concurrence en la matière sont connues et servent de référence." }]
+                },
+                { id: 'Q1.4.7',
+                    label: "Comment l'entreprise se comporte-t-elle en matière de gestion des connaissances ?",
+                    sub_part: "LE MANAGEMENT DES PERSONNELS LOGISTIQUES",
+                    options: [
+                        { value: 0, text: "0 point : Il n'y a pas de programme de formation formalisé ni de base de données de compétences." },
+                        { value: 1, text: "1 point : Un programme annuel de formation, destiné au nouveau collaborateur (y compris en cas d'évolution de poste), est élaboré. Les savoir-faire et les compétences du nouvel arrivant sont intégrés dans une base de données quelle qu'elle soit." },
+                        { value: 2, text: "2 points : Les besoins en formation sont identifiés lors de l'entretien individuel d'évaluation. Des critères de compétence sont définis et évalués. La polyvalence est développée." },
+                        { value: 3, text: "3 points : L'entreprise a une vision de ses besoins de compétence au moins à moyen terme. Les compétences potentielles sont identifiées. Des formations complémentaires sont proposées pour développer des savoir-faire. Des 'chemins de carrière' sont identifiés." }
+                    ]
+                },
+                {id: 'Q1.4.8',
+                    label: "Quelle est la politique de l'entreprise en matière de formation ?",
+                    sub_part: "LE MANAGEMENT DES PERSONNELS LOGISTIQUES",
+                    options: [
+                        { value: 0, text: "0 point : Les formations sont ad hoc et non planifiées." },
+                        { value: 1, text: "1 point : Les besoins en formation émis par le personnel logistique sont pris en compte lors de la préparation du plan annuel de formation." },
+                        { value: 2, text: "2 points : Une discussion ou un entretien individuel a lieu pour validation ou infirmation justifiée des besoins, à l'occasion de la préparation du plan de formation." },
+                        { value: 3, text: "3 points : Le plan de formation de l'entreprise comprend systématiquement un volet formation logistique visant à satisfaire les besoins exprimés par le personnel logistique, l'encadrement ou la Direction, dans le cadre des orientations stratégiques et tactiques de l'entreprise. Le plan comprend également des ressources pour assurer l'information et la sensibilisation de l'ensemble du personnel à la logistique." }]
+                },
+                {id: 'Q1.4.9',
+                    label: "Dans quelle mesure cherche-t-on à développer l'innovation ?",
+                    sub_part: "LE MANAGEMENT DES PERSONNELS LOGISTIQUES",
+                    options: [
+                        { value: 0, text: "0 point : L'innovation n'est pas un objectif formalisé." },
+                        { value: 1, text: "1 point : L'entreprise a mis en œuvre une stratégie et une politique visant à réaliser les arbitrages nécessaires entre standardisation et innovation." },
+                        { value: 2, text: "2 points : Des moyens sont mis en œuvre pour que cette politique soit effective, notamment à travers la formation, la recherche et le développement de produits et de techniques/méthodes innovantes." },
+                        { value: 3, text: "3 points : Les effets de cette stratégie sont mesurables, l'efficacité en est démontrée (baisse des coûts de revient, rythme de lancement de nouveaux produits, évolution technologique des produits existants). La démarche des concurrents est connue." }]
+                },
+                {id: 'Q1.4.10', label: "Quel système de motivation est mis en place ?",
+                    sub_part: "LE MANAGEMENT DES PERSONNELS LOGISTIQUES",
+                    options: [
+                        { value: 0, text: "0 point : La motivation repose uniquement sur le salaire de base." },
+                        { value: 1, text: "1 point : Un système général existe dans l'entreprise. Il permet, au vu de résultats représentatifs de la situation générale, de distribuer un ou plusieurs compléments de rémunération, dans le cadre d'un accord négocié. D'autres pratiques en matière de motivation et de valorisation personnelle existent en plus." },
+                        { value: 2, text: "2 points : Le personnel logistique perçoit un complément de rémunération, calculé uniformément pour ce groupe, sur la base de valeurs logistiques, telles que le taux de service ou de rupture, la baisse des coûts logistiques, ou l'amélioration de la rotation des stocks. Le potentiel du complément de rémunération est connu de chacun." },
+                        { value: 3, text: "3 points : Des sous-groupes de personnels logistiques existent, et les valeurs de référence sont spécifiques à ces sous-groupes. Les pratiques de la concurrence en la matière sont connues et servent de référence." }]
+                },
+                {id: 'Q1.4.11',
+                    label: "Comment le travail en equipe est-il mis en avant ?",
+                    sub_part: "LE MANAGEMENT DES PERSONNELS LOGISTIQUES",
+                    options: [
+                        { value: 0, text: "0 point : Le travail est majoritairement individuel et cloisonné." },
+                        { value: 1, text: "1 point : L'organisation de l'entreprise privilégie le travail en équipes autonomes." },
+                        { value: 2, text: "2 points : En outre, les équipes autonomes sont mises en avant par le biais des résultats obtenus." },
+                        { value: 3, text: "3 points : De plus, en allant au-delà de leur mission de base, les équipes contribuent à l'évolution de leur propre mission et font ainsi progresser le travail sur les différents flux logistiques." }]}
+            ],
+
+         201: [
+                {
+                    id: 'Q2.1.1', label: "Comment est assurée la gestion par projet ?", sub_part: "LA CONDUITE ET LA REALISATION DU PROJET DE DEVELOPPEMENT",
+                    options: [{ value: 0, text: "0 point : Aucune information générale sur les projets logistiques." }, { value: 1, text: "1 point : Le déroulement des différents projets logistiques menés dans l'entreprise fait l'objet d'une information générale. Communication et sensibilisation sont des pratiques courantes." }, { value: 2, text: "2 points : Pour toutes les fonctions concernées par l'avancement du projet, les différentes activités génèrent une information détaillée, largement diffusée, y compris sur le déroulement des formations en cours et/ou l'annonce de celles à venir." }, { value: 3, text: "3 points : Chaque secteur utilise une méthode de collecte d'information en retour, qui lui permet de progresser dans le cadre des projets concernés." }]
+                },
+                {
+                    id: 'Q2.1.2', label: "Comment est assurée la coordination des projets de conception ?", sub_part: "LA CONDUITE ET LA REALISATION DU PROJET DE DEVELOPPEMENT",
+                    options: [{ value: 0, text: "0 point : La coordination est ad hoc ou inexistante." }, { value: 1, text: "1 point : Les développements sont conduits sous forme de projets avec : un chef de projet, un planning mis à jour, des réunions d'avancement. Toutes les fonctions impliquées sont informées de façon continue." }, { value: 2, text: "2 points : Les différentes activités sont jalonnées de manière cohérente pour toutes les fonctions. Elles sont suivies pour prévenir les dérives concernant les délais : marketing, ventes, publicité industrialisation, engineering, production, formation, après-vente, distribution, achats." }, { value: 3, text: "3 points : Chaque secteur jalonne sa propre activité de manière à prévenir à l'avance tout risque de retard et à l'empêcher par des mesures appropriées. En cas de retard non rattrapable, toutes les conséquences sont évaluées et traitées au plus tôt. Des procédures dégradées sont en place." }]
+                },
+                {
+                    id: 'Q2.1.3', label: "Comment la coordination des procédures est-elle assurée ?", sub_part: "LES PROCEDURES",
+                    options: [{ value: 0, text: "0 point : Absence de coordination des procédures logistiques." }, { value: 1, text: "1 point : Une personne formée assure la coordination de l'ensemble des procédures logistiques de l’entreprise ; elle est chargée de s'assurer, principalement, que chacun dispose bien des derniers éléments à jour." }, { value: 2, text: "2 points : Ce coordinateur vérifie régulièrement, par des audits adaptés, à fréquence appropriée, que les dispositions ci-dessus décrites sont correctes ; des actions correctives sont menées en cas de dérive." }, { value: 3, text: "3 points : L'ensemble des procédures n'existent que sous forme virtuelle, sont disponibles sur un réseau interne, de sorte que seule la version électronique est réputée à jour. Un message d'information des modifications successives est publié. Progressivement, l'écrit est transformé en visuel." }]
+                },
+                {
+                    id: 'Q2.1.4', label: "Dans quelle mesure cherche-t-on la standardisation des composants et la modularisation ?", sub_part: "CONCEPTION ET DEVELOPPEMENT DES PRODUITS ET SERVICES",
+                    options: [{ value: 0, text: "0 point : Aucune standardisation ou modularisation activement recherchée." }, { value: 1, text: "1 point : Toutes les fois que cela est possible, on utilise des pièces du marché ou des composants qui existent déjà pour d'autres produits fabriqués." }, { value: 2, text: "2 points : La structure du produit et l'enchaînement des opérations sont conçus pour retarder au maximum la différenciation des produits (création de la variété). La diminution des temps non productifs est recherchée." }, { value: 3, text: "3 points : Les moyens nécessaires ont été mis en place pour identifier les possibilités de standardisation et créer des modules (codification, structure de nomenclature, base de données générale). La prise en compte des moyens disponibles des fournisseurs et prestataires potentiels, concourent également à la réalisation du produit." }]
+                },
+                {
+                    id: 'Q2.1.5', label: "Comment prend-on en compte les moyens de production lorsqu'on envisage de nouveaux produits, services ou contrats ?", sub_part: "CONCEPTION ET DEVELOPPEMENT DES PRODUITS ET SERVICES",
+                    options: [{ value: 0, text: "0 point : Les moyens de production ne sont pas pris en compte formellement." }, { value: 1, text: "1 point : On prend en compte les moyens de production existants et leur taux d'utilisation." }, { value: 2, text: "2 points : Plusieurs scénarios (un optimiste & un pessimiste) sont envisagés pour déterminer les moyens de production." }, { value: 3, text: "3 points : En ce qui concerne la production, une alternative (au moins) est étudiée pour chaque hypothèse." }]
+                },
+                {
+                    id: 'Q2.1.6', label: "Comment est assurée la gestion des stocks de composants obsolètes et de rebuts ?", sub_part: "CONCEPTION ET DEVELOPPEMENT DES PRODUITS ET SERVICES",
+                    options: [{ value: 0, text: "0 point : La gestion est ad hoc et les stocks d'obsolètes s'accumulent sans planification." }, 
+			      { value: 1, text: "1 point : La gestion des obsolètes et des rebuts fait l'objet d'une procédure qui est appliquée. Le traitement est effectué de manière régulière et les pertes sont comptabilisées." },
+			      { value: 2, text: "2 points : Les actions sont menées en commun entre les équipes de développement et la logistique. Des règles de gestion sont établies pour les lots de production et de pièces de rechange et appliquées." },
+			      { value: 3, text: "3 points : L'information sur les produits obsolètes est mise à disposition de tous les services (via le SI). Des actions sont menées pour minimiser les pertes (vente des produits et rebuts, utilisation alternative, etc.)." }]}
+            ],
+
+
+            301: [
+                {
+                    id: 'Q3.1.1', label: "Comment est organisée la fonction Achats/Approvisionnements ?", sub_part: "ORGANISATION ET MOYENS DE LA FONCTION",
+                    options: [
+                        { value: 0, text: "0 point : Les achats sont effectués de manière dispersée, sans coordination centrale." },
+                        { value: 1, text: "1 point : Un service Achats centralisé est en place, gérant les achats les plus importants. Une procédure achats est appliquée." },
+                        { value: 2, text: "2 points : Le service Achats travaille en étroite collaboration avec la Logistique et la Production. Des objectifs de service (délai, quantité) sont partagés." },
+                        { value: 3, text: "3 points : La fonction Achats est intégrée très en amont dans les projets de développement et les décisions stratégiques. Elle est orientée Coût Total de Possession (TCO)." }
+                    ]
+                },
+                {
+                    id: 'Q3.1.2', label: "Quels sont les délais d'approvisionnement ?", sub_part: "DELAIS ET QUALITE DES APPROVISIONNEMENTS",
+                    options: [
+                        { value: 0, text: "0 point : Les délais ne sont pas formalisés, et sont fréquemment non respectés." },
+                        { value: 1, text: "1 point : Des délais sont établis contractuellement avec les principaux fournisseurs. Leur respect est mesuré de manière ponctuelle." },
+                        { value: 2, text: "2 points : Le respect des délais est un indicateur clé de performance. Des plans d'action sont mis en place avec les fournisseurs pour réduire les écarts." },
+                        { value: 3, text: "3 points : Un processus de réduction active des délais est en place, en collaboration avec les fournisseurs stratégiques (Juste-à-Temps, VMI). Les délais sont constamment optimisés." }
+                    ]
+                },
+                {
+                    id: 'Q3.1.3', label: "Comment est gérée la qualité des approvisionnements ?", sub_part: "DELAIS ET QUALITE DES APPROVISIONNEMENTS",
+                    options: [
+                        { value: 0, text: "0 point : La réception des marchandises est la seule étape de contrôle de la qualité." },
+                        { value: 1, text: "1 point : Des spécifications claires sont fournies aux fournisseurs. Un contrôle qualité est effectué à la réception selon des plans d'échantillonnage." },
+                        { value: 2, text: "2 points : Les fournisseurs sont certifiés (ISO, etc.) et des audits qualité réguliers sont effectués par l'entreprise chez eux. Le taux de non-conformité est un KPI clé." },
+                        { value: 3, text: "3 points : La démarche Qualité est partagée avec les fournisseurs : l'objectif est le zéro défaut, et les fournisseurs assurent eux-mêmes l'auto-contrôle des livraisons." }]
+                }
+            ],
+
+            // --- NOUVEAU BLOC : Secteur 302 (La Gestion des Relations Fournisseurs) ---
+            302: [
+                {
+                    id: 'Q3.2.1', label: "Comment sont sélectionnés les fournisseurs ?", sub_part: "SELECTION ET EVALUATION DES FOURNISSEURS",
+                    options: [
+                        { value: 0, text: "0 point : Les fournisseurs sont choisis principalement sur la base du prix le plus bas." },
+                        { value: 1, text: "1 point : La sélection se fait sur la base d'un appel d'offres tenant compte du prix, du délai, et de la qualité (sur dossier)." },
+                        { value: 2, text: "2 points : Une procédure formelle de sélection est appliquée (visite du site, analyse de la capacité financière et logistique). Un panel de fournisseurs privilégiés est établi." },
+                        { value: 3, text: "3 points : L'entreprise développe des partenariats à long terme avec un nombre réduit de fournisseurs stratégiques (Co-développement, contrats-cadres)." }
+                    ]
+                },
+                {
+                    id: 'Q3.2.2', label: "L'entreprise met-elle en place des démarches de Co-développement (R&D, Logistique) ?", sub_part: "COLLABORATION AVEC LES FOURNISSEURS",
+                    options: [
+                        { value: 0, text: "0 point : Aucune collaboration au-delà de la relation acheteur-vendeur classique." },
+                        { value: 1, text: "1 point : Des discussions sont ouvertes ponctuellement pour résoudre des problèmes de logistique ou de qualité." },
+                        { value: 2, text: "2 points : Des réunions régulières de revue de performance sont organisées. Le fournisseur est impliqué dans l'amélioration continue des processus." },
+                        { value: 3, text: "3 points : L'entreprise échange des informations stratégiques (prévisions, plannings de production) et co-investit avec ses fournisseurs clés (plateformes logistiques, systèmes d'information)." }]}
+            ],
+
+            // --- NOUVEAU BLOC : Secteur 303 (Le Pilotage des Commandes Fournisseurs) ---
+            303: [
+                {
+                    id: 'Q3.3.1', label: "Comment est effectuée la gestion des prévisions pour les achats ?", sub_part: "LE PROCESSUS DE COMMANDE",
+                    options: [
+                        { value: 0, text: "0 point : Les commandes sont basées uniquement sur le niveau de stock ou les besoins urgents." },
+                        { value: 1, text: "1 point : Des prévisions de vente sont établies et transmises aux fournisseurs principaux, sans engagement formel." },
+                        { value: 2, text: "2 points : L'entreprise utilise un outil de planification (MRP, ERP) qui génère des besoins d'achats. Les prévisions sont révisées et partagées régulièrement avec les fournisseurs." },
+                        { value: 3, text: "3 points : Les systèmes d'information sont interconnectés avec ceux des fournisseurs (EDI, portail web) pour une visibilité en temps réel et un réapprovisionnement automatisé." }]},
+ {id: 'Q3.3.2', label: "Comment est assurée la traçabilité des livraisons fournisseurs ?", sub_part: "SUIVI DES LIVRAISONS",
+                    options: [
+                        { value: 0, text: "0 point : La traçabilité se limite au bon de livraison papier à l'arrivée." },
+                        { value: 1, text: "1 point : L'entreprise dispose d'un système de suivi des commandes (date de départ, date d'arrivée prévue) mise à jour manuellement." },
+                        { value: 2, text: "2 points : Le statut des commandes est suivi de manière automatique dans l'ERP. Le transporteur fournit des informations de suivi régulières (tracking)." },
+                        { value: 3, text: "3 points : Le flux d'information amont est intégré : l'entreprise connaît en temps réel la localisation précise de chaque livraison et peut anticiper tout retard pour ajuster sa production." }
+                    ]
+                }
+            ],
+
+            // --- NOUVEAU BLOC : Secteur 304 (Les Ressources Externes et les Achats) ---
+            304: [
+                {
+                    id: 'Q3.4.1', label: "Comment est gérée l'externalisation (Logistique, transport) ?", sub_part: "EXTERNALISATION ET CHOIX DES PARTENAIRES",
+                    options: [
+                        { value: 0, text: "0 point : L'externalisation est gérée au coup par coup (spot buying)." },
+                        { value: 1, text: "1 point : L'entreprise a recours à des prestataires selon un cahier des charges basique (prix, type de service)." },
+                        { value: 2, text: "2 points : Un panel de prestataires est établi sur la base de critères de performance (qualité, sécurité). Des contrats clairs avec KPI sont mis en place." },
+                        { value: 3, text: "3 points : L'entreprise travaille en partenariat avec des Prestataires Logistiques 3PL/4PL, qui sont des acteurs de sa stratégie logistique." }
+                    ]
+                },
+                {id: 'Q3.4.2', label: "Comment sont gérés les achats de transport ?", sub_part: "ACHATS DE TRANSPORT",
+                    options: [
+                        { value: 0, text: "0 point : Le transport est laissé à l'initiative du fournisseur ou du client." },
+                        { value: 1, text: "1 point : Des contrats de transport sont négociés et la couverture d'assurance est vérifiée." },
+                        { value: 2, text: "2 points : L'entreprise consolide ses flux de transport (lots complets, groupage) pour optimiser les coûts. L'impact CO2 est mesuré." },
+                        { value: 3, text: "3 points : L'entreprise dispose d'un TMS (Transport Management System) pour la planification, l'exécution et l'optimisation des tournées, et utilise des modes de transport alternatifs." }
+                    ]
+                }
+            ],
+401: [
+                {id: 'Q4.1.1',
+                    label: "Comment les implantations sont-elles optimisées ?",
+                    sub_part: "LA MANUTENTION ET LE TRANSPORT INTERNE",
+                    options: [
+			{ value: 0, text: "0 point : pas d'actions." },
+                        { value: 1, text: "1 point : L'implantation des sites est globalement cohérente" },
+                        { value: 2, text: "2 points : Chaque fois que l'occasion d'une réimplantation se présente, on améliore l'implantation en recherchant la réduction des temps d'écoulement." },
+                        { value: 3, text: "3 points : Les flux sont simplifiés au maximum avec, par exemple, une préférence pour l'orientation en ligne de flux plutôt que par pôles technologiques." }
+                    ]
+                },
+                // 4.1.2 - LA PLANIFICATION
+                {
+                    id: 'Q4.1.2',
+                    label: "Comment l'ordonnancement de la production est-il fait ?",
+                    sub_part: "LA PLANIFICATION",
+                    options: [
+			{ value: 0, text: "0 point : pas d'actions." },
+                        { value: 1, text: "1 point : Les ordres sont planifiés en fonction des règles définies et la production réalisée est suivie avec précision. Des réunions régulières ont lieu pour suivre la production, vérifier l'avancement des ordres, détecter les risques et les problèmes à traiter." },
+                        { value: 2, text: "2 points : Une méthode d'ordonnancement adaptée à l'activité permet de connaître rapidement : le délai de mise à disposition des produits, l'impact d'une défaillance sur le délai final, le délai d'un nouvel ordre introduit." },
+                        { value: 3, text: "3 points : Cette méthode fait l'objet d'améliorations et les résultats de ces améliorations sont connus et largement diffusés. Leur but est de se placer en situation d'un délai de plus en court exprimé par le client ; les méthodes utilisées par des entreprises analogues et/ou des concurrents sont connues." }
+                    ]
+                },
+                {
+                    id: 'Q4.1.3',
+                    label: "Comment sont maîtrisés le flux de production interne et le flux externe pour la sous-traitance ?",
+                    sub_part: "LE TEMPS D'ÉCOULEMENT INTERNE",
+                    options: [
+			{ value: 0, text: "0 point : pas d'actions." },
+                        { value: 1, text: "1 point : Les délais d'écoulement moyens sont mesurés régulièrement, statistiquement. Les délais communiqués au client tiennent compte de ces mesures et de leurs évolutions." },
+                        { value: 2, text: "2 points : Des actions tentent de les réduire, ou bien d'améliorer les choix possibles s'il s'agit de sous-traitance à dominante technique." },
+                        { value: 3, text: "3 points : Dans le but de raccourcir les délais d'écoulement tout au long de la Supply Chain, des programmes permanents sont en vigueur afin de réduire le temps d'immobilisation des en-cours ; les pratiques d'entreprises analogues, et/ou celles des concurrents sont connues et analysées régulièrement." }
+                    ]
+                },
+                {
+                    id: 'Q4.1.4',
+                    label: "Comment une flexibilité du process industriel est-elle assurée ?",
+                    sub_part: "LA FLEXIBILITÉ",
+                    options: [
+			{ value: 0, text: "0 point : pas d'actions." },
+                        { value: 1, text: "1 point : Les temps de changements de fabrication sont évalués et, s'ils sont pénalisants, des interventions tentent de les améliorer." },
+                        { value: 2, text: "2 points : L'implantation des différents ateliers, de la réception, de la manutention, du stockage et de l'expédition, est rationalisée de manière à réduire les distances et à simplifier la gestion des flux." },
+                        { value: 3, text: "3 points : Des actions sont engagées pour améliorer la flexibilité du process. Les principaux éléments liés à la flexibilité du process des entreprises analogues et/ou des concurrents sont connus." }
+                    ]
+                },
+                {
+                    id: 'Q4.1.5',
+                    label: "Comment une flexibilité du personnel de production est-elle assurée ?",
+                    sub_part: "LA FLEXIBILITÉ",
+                    options: [
+			{ value: 0, text: "0 point : pas d'actions." },
+                        { value: 1, text: "1 point : La polyvalence du personnel est évaluée et développée." },
+                        { value: 2, text: "2 points : Il doit être possible de modifier de façon rapide le temps d'ouverture des ateliers." },
+                        { value: 3, text: "3 points : Des actions sont engagées pour améliorer la flexibilité. Les principaux éléments liés à la flexibilité des entreprises analogues sont connus." }
+                    ]
+                },
+                {
+                    id: 'Q4.1.6',
+                    label: "Comment une fiabilité adaptée est-elle assurée (aspects maintenance) ?",
+                    sub_part: "LA FIABILITÉ DES FLUX INDUSTRIELS",
+                    options: [
+			{ value: 0, text: "0 point : pas d'actions." },
+                        { value: 1, text: "1 point : Pour éviter les ruptures de livraisons, la réparation des pannes peut être assurée par un personnel ayant les compétences nécessaires et disponible en nombre approprié pendant les heures consacrées à la production." },
+                        { value: 2, text: "2 points : Les équipements destinés à la réparation des machines sont suffisants... La maintenance préventive est organisée, planifiée à l'avance et cette planification est respectée." },
+                        { value: 3, text: "3 points : Les principaux facteurs de risques de rupture de flux sont identifiés et une série de mesures est préparée pour chacun d'eux... Des actions et outils existent pour équilibrer en permanence le coût des programmes engagés..." }
+                    ]
+                },
+                {
+                    id: 'Q4.1.7',
+                    label: "Comment une fiabilité adaptée est-elle assurée (aspects outillage) ?",
+                    sub_part: "LA FIABILITÉ DES FLUX INDUSTRIELS",
+                    options: [
+			{ value: 0, text: "0 point : pas d'actions." },
+                        { value: 1, text: "1 point : Pour éviter les ruptures de livraison, la réparation des bris d'outillages peut être assurée par un personnel ayant les compétences nécessaires et disponible en nombre approprié pendant les heures consacrées à la production." },
+                        { value: 2, text: "2 points : Les équipements destinés à la réparation des outillages sont suffisants... La maintenance préventive est organisée, planifiée à l'avance et cette planification est respectée." },
+                        { value: 3, text: "3 points : Les principaux facteurs de risques de rupture de flux sont identifiés et une série de mesures est préparée pour chacun d'eux... Des actions et outils existent pour équilibrer en permanence le coût des programmes engagés..." }
+                    ]
+                },
+                // 4.1.8 - LE SUIVI DE LA PERFORMANCE LOGISTIQUE
+                {
+                    id: 'Q4.1.8',
+                    label: "Comment sont travaillés les taux de service ?",
+                    sub_part: "LE SUIVI DE LA PERFORMANCE LOGISTIQUE",
+                    options: [
+			{ value: 0, text: "0 point : pas d'actions." },
+                        { value: 1, text: "1 point : Le taux de service de production est défini avec la précision appropriée. Il est suivi au moins mensuellement et communiqué aux personnes concernées." },
+                        { value: 2, text: "2 points : Des objectifs sont fixés dans une perspective d'amélioration. Ils sont liés à des interventions concrètes. Les délais de production et d'approvisionnement sont suivis et analysés..." },
+                        { value: 3, text: "3 points : Les taux de services des entreprises analogues et/ou des principaux concurrents sont connus. Des taux de services intermédiaires sont définis..." }
+                    ]
+                }
+            ],
+
+            // --- NOUVEAU BLOC : Secteur 501 (Les Flux Physiques et la Distribution) ---
+            501: [
+                // 5.1.1 - LES PRESTATAIRES DE TRANSPORT SUR LE FLUX AMONT
+                {
+                    id: 'Q5.1.1',
+                    label: "Comment sont choisis les transporteurs assurant les approvisionnements et quel partenariat logistique existe avec eux ?",
+                    sub_part: "LES FLUX PHYSIQUES 5.1.1 : FLUX AMONT",
+                    options: [
+			{ value: 0, text: "0 point : pas d'actions." },
+                        { value: 1, text: "1 point : Pour les principaux fournisseurs, le transporteur est connu, même si l'approvisionnement est fait selon I'Incoterm DDU ou DDP." },
+                        { value: 2, text: "2 points : Quel que soit I'Incoterm retenu, un dispositif de planification des flux d'entrée contribue au lissage de l'activité de réception. L'entreprise connaît ses coûts d'acheminement..." },
+                        { value: 3, text: "3 points : Les procédures du service de planification des livraisons permettent de réserver la capacité nécessaire auprès du transporteur... Des indicateurs d'efficacité et de performance du transport sont définis, suivis, et générateurs de progrès." }
+                    ]
+                },
+                // 5.1.2 - LES PRESTATAIRES DE TRANSPORT SUR LE FLUX AVAL
+                {
+                    id: 'Q5.1.2',
+                    label: "Comment sont choisis les transporteurs assurant les livraisons vers les clients ou Prestataires intermédiaires et quel partenariat logistique existe avec eux ?",
+                    sub_part: "LES FLUX PHYSIQUES 5.1.2 : FLUX AVAL",
+                    options: [
+			{ value: 0, text: "0 point : pas d'actions." },
+                        { value: 1, text: "1 point : Préalablement à l'existence d'une procédure de choix, un contrôle avant chaque chargement permet de vérifier la conformité du véhicule qui se présente." },
+                        { value: 2, text: "2 points : Le choix des transporteurs s'effectue selon une procédure précise... Elle prévoit, entre autres, la rédaction préalable d'un cahier des charges..." },
+                        { value: 3, text: "3 points : En outre, les principaux transporteurs sélectionnés sont préalablement audités, dans le but d'analyser et de vérifier la faisabilité des opérations qui peuvent leur être confiées." }
+                    ]
+                },
+                // 5.1.3 - LA PLANIFICATION ET LA PROGRAMMATION DE LA DISTRIBUTION PHYSIQUE ET DU TRANSPORT
+                {
+                    id: 'Q5.1.3',
+                    label: "Comment sont évalués les besoins en ressources de distribution et de transport ?",
+                    sub_part: "LA DISTRIBUTION 5.1.3 : PLANIFICATION DES RESSOURCES",
+                    options: [
+			{ value: 0, text: "0 point : pas d'actions." },
+                        { value: 1, text: "1 point : Une procédure existe... elle fixe la manière de traiter les besoins et de faire en sorte que les ressources nécessaires soient disponibles au moment le plus approprié." },
+                        { value: 2, text: "2 points : La procédure est formalisée. Elle est intégrée dans le dispositif de planification. Des réunions régulières ont lieu entre les différents partenaires intéressés, dans le but de réévaluer les besoins en ressources." },
+                        { value: 3, text: "3 points : Un responsable est chargé de préparer les réunions, de simuler des solutions de façon à optimiser la gestion de la chaîne logistique. Ce même responsable est habilité à faire les arbitrages nécessaires." }
+                    ]
+                },
+                // 5.1.4 - LA PLANIFICATION ET LA PROGRAMMATION DE LA DISTRIBUTION PHYSIQUE ET DU TRANSPORT SUR LE FLUX AVAL
+                {
+                    id: 'Q5.1.4',
+                    label: "Comment sont effectués le traitement des commandes, l'ordonnancement des ordres de livraisons émis, le lancement du transport ?",
+                    sub_part: "LES FLUX PHYSIQUES 5.1.4 : ORDONNANCEMENT ET LANCEMENT",
+                    options: [
+			{ value: 0, text: "0 point : pas d'actions." },
+                        { value: 1, text: "1 point : Le lancement de la préparation de commande est effectué à partir des ordres de livraison et est mis en œuvre pour que les délais convenus avec le client soient respectés." },
+                        { value: 2, text: "2 points : Des moyens sont mis en place pour garantir que toutes les commandes à expédier selon le plan de transport le soient effectivement. Lorsqu'un problème se pose, le ou les clients sont avisés du retard..." },
+                        { value: 3, text: "3 points : Le respect des délais étant maîtrisé, leur réduction fait l'objet d'une étude constante." }
+                    ]
+                },
+                // 5.1.5 - TRANSPORT ET LIVRAISON SUR LE FLUX AVAL (Maîtrise des opérations et infos)
+                {
+                    id: 'Q5.1.5',
+                    label: "Quelle maîtrise est exercée sur les opérations de transport et sur les délais de transmission des informations ?",
+                    sub_part: "LES FLUX PHYSIQUES 5.1.5 : MAÎTRISE DES OPÉRATIONS",
+                    options: [
+			{ value: 0, text: "0 point :Aucune maitrise." },
+
+                        { value: 1, text: "1 point : Un programme de transport tient compte des jours et horaires d'ouverture des clients. Si une commande ne peut être acheminée correctement, le service ADV est avisé." },
+                        { value: 2, text: "2 points : Tous les moyens sont mis en œuvre pour que les commandes soient livrées dans les délais. Si un retard de transport survient, le transporteur prend contact avec le client... Un contrôle des délais et un état des retards est tenu à jour." },
+                        { value: 3, text: "3 points : Les délais et les coûts de transport sont maîtrisés comme en attestent les indicateurs publiés. Un plan général d'amélioration inclut la réduction des délais et des coûts... Les principaux transporteurs s’engagent à mettre en place des procédures dégradées." }]
+              },
+                // 5.1.6 - TRANSPORT ET LIVRAISON SUR LE FLUX AVAL (Sécurité des produits)
+                {id: 'Q5.1.6',
+                    label: "Quelle maîtrise est exercée sur la sécurité des produits pendant les opérations de transport ?",
+                    sub_part: "LES FLUX PHYSIQUES 5.1.6 : SÉCURITÉ DES PRODUITS",
+                    options: [
+			 { value: 0, text: "0 point : Pas de mesures prévues." },
+                        { value: 1, text: "1 point : Un contrôle qualitatif et quantitatif des marchandises expédiées est réalisé à la prise en charge par le transporteur. Les aspects concernant la sûreté et la sécurité sont inclus dans les documents contractuels." },
+                        { value: 2, text: "2 points : Tout incident ou aléa survenant pendant l'opération de transport et entraînant le non-respect des engagements contractuels est signalé immédiatement par l'opérateur du transport." },
+                        { value: 3, text: "3 points : Des règles de refacturation des produits détériorés sont définies et respectées." }
+                    ]
+                },
+                // 5.1.7 - TRANSPORT ET LIVRAISON SUR LE FLUX AVAL (Qualité)
+                {id: 'Q5.1.7',
+                    label: "Quelle maîtrise est exercée sur la qualité du transport et de la livraison ?",
+                    sub_part: "LES FLUX PHYSIQUES 5.1.7 : QUALITÉ DU SERVICE",
+                    options: [
+			{ value: 0, text: "0 point : pas d'actions." },
+
+                        { value: 1, text: "1 point : Le service ADV est avisé dès que l'anomalie est constatée en sorte qu'il puisse réagir auprès du client et amoindrir l'effet des erreurs de livraison ou fautes de la part du livreur." },
+                        { value: 2, text: "2 points : Un état analytique permet de suivre les dommages et les erreurs de livraison. Des enquêtes ponctuelles sont renseignées par les clients. Les résultats de ces enquêtes sont régulièrement publiés." },
+                        { value: 3, text: "3 points : Des enquêtes systématiques sont effectuées auprès des clients pour mesurer leur niveau de satisfaction. Des moyens ont été mis en place avec le transporteur et le service client de façon à éviter la répétition des erreurs." }]}
+            ],
+601: [
+    {id: 'Q6.1.1',
+        label: "Quelle implantation a été étudiée pour assurer les opérations de magasinage ?",
+        sub_part: "LES FLUX PHYSIQUES - TENUE DES STOCKS",
+        options: [
+            { value: 0, text: "0 point : Pas d'implantation rationnelle ou flux anarchiques." },
+            { value: 1, text: "1 point : Implantation rationnelle, réduction des croisements de flux, respect du FIFO/FEFO et personnel capable d'expliquer la localisation." },
+            { value: 2, text: "2 points : Emplacements gérés par SI (adressage), trajets directs et méthode documentée pour l'intégration de nouvelles références." },
+            { value: 3, text: "3 points : Informatique embarquée, personnel polyvalent et responsable du flux, alertes de saturation et revue régulière des stocks morts." }
+        ]
+    },
+    {id: 'Q6.1.2',
+        label: "Comment sont gérés les moyens de manutention et de stockage ?",
+        sub_part: "LES FLUX PHYSIQUES - GESTION DE L'ACTIVITÉ",
+        options: [
+            { value: 1, text: "1 point : Moyens adaptés aux besoins, maintenance sur site, respect des règles de sécurité et absence de saturation." },
+            { value: 2, text: "2 points : Implantation révisée régulièrement, contrats de maintenance avec délais garantis et matériel de rechange/stockage exceptionnel prévu." },
+            { value: 3, text: "3 points : Plan de maintenance préventive, suivi du taux de remplissage et gestion préventive des ressources pour lisser l'activité." }]
+    },
+    {id: 'Q6.1.3',
+        label: "Comment sont gérés les conditionnements ?",
+        sub_part: "LES FLUX PHYSIQUES - CONDITIONNEMENTS",
+        options: [
+            { value: 1, text: "1 point : Utilisation privilégiée de conditionnements normalisés et de grande diffusion." },
+            { value: 2, text: "2 points : Programme actif de réduction du nombre de références et recherche de standardisation." },
+            { value: 3, text: "3 points : Utilisation de conditionnements réutilisables (navettes) partout où cela est possible." }]
+    },
+    {id: 'Q6.2.1',
+        label: "Comment une gestion des stocks est-elle assurée ?",
+        sub_part: "LES STOCKS - GESTION DES FLUX",
+        options: [
+            { value: 1, text: "1 point : Règles d'arbitrage stock/taux de service définies avec indicateurs mensuels." },
+            { value: 2, text: "2 points : Mesures par catégories pertinentes et actions correctives sur les dérives." },
+            { value: 3, text: "3 points : Optimisation continue comprise par la direction (arbitrage couple stock/rupture)." }]
+    },
+    {
+        id: 'Q6.2.2',
+        label: "Comment sont travaillés les niveaux de stock ?",
+        sub_part: "LES STOCKS - PERFORMANCE",
+        options: [
+            { value: 1, text: "1 point : Indicateurs détaillés par catégories, évalués mensuellement et communiqués." },
+            { value: 2, text: "2 points : Analyse du vieillissement trimestrielle et mesures de traitement/élimination des stocks morts." },
+            { value: 3, text: "3 points : Benchmarking régulier avec les concurrents et entreprises analogues." }]
+    },
+    {id: 'Q6.2.3',
+        label: "Comment sont gérées les réservations de stock ?",
+        sub_part: "LES STOCKS - RÉSERVATIONS",
+        options: [
+            { value: 1, text: "1 point : Toutes les réservations de stock sont assurées." },
+            { value: 2, text: "2 points : Gestion informatique couverte par une procédure vérifiée régulièrement." },
+            { value: 3, text: "3 points : Verrouillage système interdisant tout mouvement physique non autorisé au préalable." }]
+    },
+    {id: 'Q6.2.4',
+        label: "A quel moment sont enregistrées les transactions de stock ?",
+        sub_part: "LES STOCKS - TRANSACTIONS",
+        options: [
+            { value: 1, text: "1 point : Procédure définie, personnel formé et correction immédiate des écarts constatés." },
+            { value: 2, text: "2 points : Saisie automatique (Code-barres/EDI) au moment opportun pour éviter les écarts réel/système." },
+            { value: 3, text: "3 points : Intégration totale (interfaces), aucun mouvement possible sans connaissance du SI, baisse prouvée des non-conformités." }]
+    },
+    {id: 'Q6.2.5',
+        label: "Comment une saisie fiable des mouvements et des stocks est-elle assurée ?",
+        sub_part: "LES STOCKS - FIABILITÉ",
+        options: [
+            { value: 1, text: "1 point : Mouvements traités rapidement et de manière fiable." },
+            { value: 2, text: "2 points : Organisation systématique d'inventaires tournants." },
+            { value: 3, text: "3 points : Analyse systématique des causes d'écart et mise en place de mesures préventives." }]
+    },
+    {id: 'Q6.3.1',
+        label: "Quelles règles régissent les stocks des fournisseurs pour les produits approvisionnés ?",
+        sub_part: "STOCKS EXTERNES - FOURNISSEURS",
+        options: [
+            { value: 1, text: "1 point : Existence de stocks tampons pour effacer les aléas." },
+            { value: 2, text: "2 points : Méthode de détermination connue et information proactive du fournisseur sur les évolutions." },
+            { value: 3, text: "3 points : Méthode commune visant le stock minimum (VMI/GPA) sans altérer le taux de service." }
+        ]
+    },
+    {id: 'Q6.3.2',
+        label: "Comment une gestion des stocks de matières premières est-elle assurée à l'extérieur du site ?",
+        sub_part: "STOCKS EXTERNES - MATIÈRES PREMIÈRES",
+        options: [
+            { value: 1, text: "1 point : Méthode assurant disponibilité et taux de service satisfaisant." },
+            { value: 2, text: "2 points : Existence d'un groupe de travail dédié et étude de méthodes alternatives." },
+            { value: 3, text: "3 points : Audits réguliers et veille sur les marchés pour adapter les outils d'approvisionnement." }]
+    },
+    { id: 'Q6.4.1',
+        label: "Comment une gestion des stocks de produits finis est-elle assurée sur le site ?",
+        sub_part: "DISTRIBUTION - PRODUITS FINIS SITE",
+        options: [
+            { value: 1, text: "1 point : Stationnement limité au temps technique de transport/expédition (sauf accord client)." },
+            { value: 2, text: "2 points : Production en excès proposée au client et action sur les paramètres de lancement pour réduire les surplus." },
+            { value: 3, text: "3 points : Objectif 'Stock Zéro' avec indicateurs de progrès et libération de surfaces pour d'autres activités." }]
+    },
+    { id: 'Q6.4.2',
+        label: "Comment est assurée la gestion des stocks de produits finis à l'extérieur du site ?",
+        sub_part: "DISTRIBUTION - PRODUITS FINIS EXTERNE",
+        options: [
+            { value: 1, text: "1 point : Disponibilité assurée selon le taux de service visé." },
+            { value: 2, text: "2 points : Groupe de travail formé étudiant de nouvelles méthodes d'approvisionnement." },
+            { value: 3, text: "3 points : Audits réguliers et adaptation aux contraintes du marché pour améliorer l'efficacité." }]
+    },
+    {id: 'Q6.4.3',
+        label: "Comment est gérée la gestion des stocks PF chez des prestataires temporaires ?",
+        sub_part: "DISTRIBUTION - PRESTATAIRES",
+        options: [
+            { value: 1, text: "1 point : Procédure établie fixant les conditions de choix des produits et prestataires." },
+            { value: 2, text: "2 points : Stocks gérés via le SI interne comme s'ils étaient sur site avec optimisation des coûts." },
+            { value: 3, text: "3 points : Amélioration permanente pour limiter le recours au stockage extérieur et indicateurs de coûts." }]
+    },
+    {id: 'Q6.4.4',
+        label: "Comment est gérée la gestion des stocks en consignation chez les clients ?",
+        sub_part: "DISTRIBUTION - CONSIGNATION",
+        options: [
+            { value: 1, text: "1 point : Codification unique partagée garantissant la continuité de l'information." },
+            { value: 2, text: "2 points : Remontée rapide des ventes/livraisons pour maintenir la véracité de l'inventaire permanent." },
+            { value: 3, text: "3 points : Inventaires communs précis avec réduction constante des écarts." }]}
+],
+
+	701: [
+    {
+        id: 'Q7.1.1',
+        label: "Comment sont pris en compte les aspects logistiques lors de lancements ?",
+        sub_part: "LA DÉFINITION DE L'OFFRE LOGISTIQUE",
+        options: [
+            { value: 0, text: "0 point : La logistique n'est pas consultée pour les nouveaux produits/promotions." },
+            { value: 1, text: "1 point : Les acteurs logistiques sont avertis à l'avance." },
+            { value: 2, text: "2 points : Information précoce permettant des modifications de programmation en cas de difficulté." },
+            { value: 3, text: "3 points : Gestion en mode projet avec suivi des dérives et capitalisation d'expérience." }
+        ]
+    },
+
+    {
+        id: 'Q7.1.3',
+        label: "Comment les emballages et supports de manutention sont-ils choisis ?",
+        sub_part: "LA DÉFINITION DE L'OFFRE LOGISTIQUE",
+        options: [
+            { value: 1, text: "1 point : Client informé de la nature des emballages et des procédures de réserves." },
+            { value: 2, text: "2 points : Procédure précise et choix convenu lors des négociations préalables." },
+            { value: 3, text: "3 points : Fiabilité garantie par audits et gestion systématique des retours/consignations." }
+        ]
+    },
+    {
+        id: 'Q7.1.7',
+        label: "Quelle est l'influence de la gestion du crédit client sur la logistique ?",
+        sub_part: "LE SUIVI LOGISTIQUE",
+        options: [
+            { value: 1, text: "1 point : Conditions connues ; validation de commande selon le crédit autorisé." },
+            { value: 2, text: "2 points : Système globalisé (multi-sites) ; blocage possible même si l'en-cours n'est pas atteint." },
+            { value: 3, text: "3 points : Consolidation de l'en-cours possible au niveau d'un groupe de sociétés." }
+        ]
+    },
+    {
+        id: 'Q7.1.8',
+        label: "Quelle est l'influence du recouvrement sur les décisions logistiques ?",
+        sub_part: "LE SUIVI LOGISTIQUE",
+        options: [
+            { value: 1, text: "1 point : Suivi des échéances pour prévenir les risques de retards ou impayés." },
+            { value: 2, text: "2 points : Relances automatisées selon la gravité ; procédures juridiques claires." },
+            { value: 3, text: "3 points : Suivi préventif pour détecter les litiges fictifs visant à décaler les règlements." }
+        ]
+    }
+],
+
+// --- SECTEUR 702 : GESTION DES COMMANDES CLIENT ---
+	702:[
+    {
+        id: 'Q7.2.1',
+        label: "Quelles sont les vérifications effectuées lors de la prise de commande ?",
+        sub_part: "LA GESTION DES COMMANDES CLIENT",
+        options: [
+            { value: 1, text: "1 point : Vérification des infos client (adresse, crédit) et produits (quantité, export)." },
+            { value: 2, text: "2 points : Capacité de correction immédiate des anomalies et politique de responsabilisation." },
+            { value: 3, text: "3 points : Statistiques sur les anomalies et plans d'actions préventives systématiques." }
+        ]
+    },
+    {
+        id: 'Q7.2.3',
+        label: "Comment est gérée la pénurie ?",
+        sub_part: "LA GESTION DES STOCKS DE PRODUITS FINIS",
+        options: [
+            { value: 1, text: "1 point : Instructions pour en référer à une autorité désignée." },
+            { value: 2, text: "2 points : Procédure simple de négociation avec le client sur l'affectation du disponible." },
+            { value: 3, text: "3 points : Information sur les disponibilités futures/substitution et réorganisation du portefeuille." }
+        ]
+    }
+],
+
+// --- SECTEUR 703 : PRÉPARATION ET DISTRIBUTION ---
+	703:[
+    {
+        id: 'Q7.3.1',
+        label: "Comment est réalisée la programmation des opérations ?",
+        sub_part: "PLANIFICATION AVAL",
+        options: [
+            { value: 1, text: "1 point : Programmation régulière du magasinage, préparation et transport." },
+            { value: 2, text: "2 points : Procédure formalisée s'appuyant sur le PDP/PDL ou programme des ventes." },
+            { value: 3, text: "3 points : Responsable dédié à l'optimisation des ressources et du service client." }
+        ]
+    },
+    {
+        id: 'Q7.3.3',
+        label: "Comment est réalisée la préparation de commandes ?",
+        sub_part: "LA PRÉPARATION DES COMMANDES",
+        options: [
+            { value: 1, text: "1 point : Respect des délais et des règles de rotation (FIFO/FEFO)." },
+            { value: 2, text: "2 points : Processus optimisé pour réduire les erreurs et améliorer l'efficacité." },
+            { value: 3, text: "3 points : Analyse permanente des écarts et mise en place de solutions techniques/process." }]
+    }
+],
+
+// --- SECTEUR 704 : PERFORMANCE ET NON-CONFORMITÉS ---
+	704: [
+    {
+        id: 'Q7.4.2',
+        label: "Comment le service global donné au client est-il mesuré ?",
+        sub_part: "LA MESURE DE LA PERFORMANCE",
+        options: [
+            { value: 1, text: "1 point : Indicateur permanent de qualité associé à un objectif formalisé." },
+            { value: 2, text: "2 points : Analyse et traitement de toutes les défaillances avec les clients concernés." },
+            { value: 3, text: "3 points : Enquêtes de satisfaction régulières avec restitution aux clients." }
+        ]
+    },
+    {
+        id: 'Q7.4.4',
+        label: "Comment l'amélioration de la performance est-elle recherchée ?",
+        sub_part: "LA PERFORMANCE",
+        options: [
+            { value: 1, text: "1 point : Comparaison globale entre l'activité prévue et réalisée." },
+            { value: 2, text: "2 points : Analyse détaillée par secteur et mesure du progrès lié aux actions correctives." },
+            { value: 3, text: "3 points : Analyse fine des causes récurrentes et disparition constatée via actions préventives." }]}
+	],
+801: [
+	{ 
+        id: 'Q8.1.1', 
+        label: "Séparation des flux retours et distribution ?", 
+        options: [
+            { value: 1, text: "1 point : Dispositions spécifiques prises suite à des dysfonctionnements." },
+            { value: 2, text: "2 points : Organisation modifiée, flux physiques clairement séparés." },
+            { value: 3, text: "3 points : Réduction permanente des coûts et suppression des causes de retour." }
+        ] 
+    },
+    { 
+        id: 'Q8.1.2', 
+        label: "Intégration des objectifs de réduction de coût SAV ?", 
+        options: [
+            { value: 1, text: "1 point : Coûts suivis, budgétés et intégrés au contrôle budgétaire." },
+            { value: 2, text: "2 points : Politique de mesure satisfaction client vs rentabilité." },
+            { value: 3, text: "3 points : Démarche volontaire d'amélioration continue avec résultats visibles." }
+        ] 
+    },
+    { 
+        id: 'Q8.1.3', 
+        label: "Détermination des objectifs et organisation du SAV ?", 
+        options: [
+            { value: 1, text: "1 point : Service existant assurant pièces et réparations (Garantie/Hors garantie)." },
+            { value: 2, text: "2 points : Objectifs de délai et disponibilité suivis ; plan de formation établi." },
+            { value: 3, text: "3 points : Benchmarking concurrence et remontée immédiate aux bureaux d'études." }
+        ] 
+    },
+    { 
+        id: 'Q8.1.4', 
+        label: "Système d'information et planification SAV ?", 
+        options: [
+            { value: 1, text: "1 point : Système de calcul des besoins et gestion des stocks spécifique." },
+            { value: 2, text: "2 points : Gestion des équilibres charges/capacités intégrée." },
+            { value: 3, text: "3 points : Sous-système intégré au SI global, ouvert et paramétrable." }
+        ] 
+    },
+    { 
+        id: 'Q8.1.5', 
+        label: "Adaptation de l'offre SAV aux besoins clients ?", 
+        options: [
+            { value: 1, text: "1 point : Offre mise au point après études concertées en interne." },
+            { value: 2, text: "2 points : Amélioration ponctuelle de l'offre à chaque occasion." },
+            { value: 3, text: "3 points : Amélioration continue via l'exploitation systématique d'enquêtes." }
+        ] 
+    },
+    { 
+        id: 'Q8.1.6', 
+        label: "Gestion du cycle de vie et fin de vie du produit ?", 
+        options: [
+            { value: 1, text: "1 point : Récupération du produit en fin de vie envisagée." },
+            { value: 2, text: "2 points : Procédure de démontage, recyclage ou valorisation établie." },
+            { value: 3, text: "3 points : Procédure améliorée par retour d'expérience et évolution réglementaire." }
+        ] 
+    }
+],
+
+802: [
+    { 
+        id: 'Q8.2.1', 
+        label: "Gestion physique des réclamations et retours ?", 
+        options: [
+            { value: 1, text: "1 point : Entrées maîtrisées et décision de reprise collégiale." },
+            { value: 2, text: "2 points : Marchandise identifiée avec code de motif et destination précise." },
+            { value: 3, text: "3 points : Analyse régulière des causes pour réduction drastique des retours." }
+        ] 
+    },
+    { 
+        id: 'Q8.2.2', 
+        label: "Gestion des rappels et retraits produits ?", 
+        options: [
+            { value: 1, text: "1 point : Procédure prévue en cas de doute sur un produit livré." },
+            { value: 2, text: "2 points : Procédure améliorée en fonction de l'historique connu." },
+            { value: 3, text: "3 points : Amélioration préventive permanente pour minimiser l'impact client." }
+        ] 
+    },
+    { 
+        id: 'Q8.2.4', 
+        label: "Transport et traitement des retours ?", 
+        options: [
+            { value: 1, text: "1 point : Procédure simple pour organiser le transport et l'imputation des frais." },
+            { value: 2, text: "2 points : Analyse des frais et indicateurs de cohérence avec les causes." },
+            { value: 3, text: "3 points : Prévention des abus et examens des dérives de fonctionnement." }
+        ] 
+    },
+    { 
+        id: 'Q8.2.5', 
+        label: "Organisation du tri des produits ?", 
+        options: [
+            { value: 1, text: "1 point : Produit isolé du flux principal pour éviter toute réintégration erreur." },
+            { value: 2, text: "2 points : Procédure formalisée de traitement physique et administratif via le SI." },
+            { value: 3, text: "3 points : Indicateurs montrant une baisse réelle du nombre de retours." }
+        ] 
+    },
+    { 
+        id: 'Q8.2.6', 
+        label: "Catégorisation et filières de recyclage ?", 
+        options: [
+            { value: 1, text: "1 point : Règles de catégorisation existantes et communiquées au client." },
+            { value: 2, text: "2 points : Documents contractuels avec tiers et indicateurs de performance éco." },
+            { value: 3, text: "3 points : Valorisation de l'activité retour et pratique de l'éco-conception." }
+        ] 
+    },
+    { 
+        id: 'Q8.2.7', 
+        label: "Gestion du stock de pièces détachées ?", 
+        options: [
+            { value: 1, text: "1 point : Objectif de disponibilité fixé et suivi par des actions concrètes." },
+            { value: 2, text: "2 points : Paramètres de gestion pertinents et personnel formé à l'outil." },
+            { value: 3, text: "3 points : Tendance vers 100% de disponibilité et délais très courts." }
+        ] 
+    },
+    { 
+        id: 'Q8.2.8', 
+        label: "Destruction des produits et traçabilité ?", 
+        options: [
+            { value: 1, text: "1 point : Procédure de destruction attestée par tiers agréés selon critères Coût/Sécurité." },
+            { value: 2, text: "2 points : Analyse des destructions et indicateurs d'actions correctives." },
+            { value: 3, text: "3 points : Actions de fond pour limiter la destruction à des cas très restreints." }]}
+],
+	
+901: [
+    {
+        id: 'Q9.1.1',
+        label: "Comment est garantie la performance des opérations sur les flux amont, interne et aval ?",
+        sub_part: "LA PERFORMANCE DES FLUX",
+        options: [
+            { value: 0, text: "0 point : Aucun indicateur global de performance n'est utilisé." },
+            { value: 1, text: "1 point : Trois groupes d’indicateurs (Qualité, Coûts, Délais) existent pour chaque flux." },
+            { value: 2, text: "2 points : Indicateurs étendus disponibles (niveaux/qualité des stocks, prévisions, non-conformités)." },
+            { value: 3, text: "3 points : Pilotage global de la Supply Chain via une synthèse de 7 indicateurs maximum." }
+        ]
+    },
+    {
+        id: 'Q9.1.2',
+        label: "Comment est mesurée la performance de la Supply Chain ?",
+        sub_part: "LES OBJECTIFS DE LA PERFORMANCE LOGISTIQUE",
+        options: [
+            { value: 0, text: "0 point : Absence de tableau de bord global suivi par la direction." },
+            { value: 1, text: "1 point : Tableau de bord global suivi au plus haut niveau et personnel informé régulièrement." },
+            { value: 2, text: "2 points : Suivi des écarts (réalisé vs objectif), actions correctives et analyse des facteurs d'évolution." },
+            { value: 3, text: "3 points : Tableau de bord pyramidal (service, stock, transport, manutention) avec diffusion fiable vers tous les niveaux." }
+        ]
+    }
+],
+	1001: [
+    {
+        id: 'Q10.1.1',
+        label: "L'entreprise est-elle dans une démarche qualité ?",
+        sub_part: "LA CONDUITE DU PROGRES",
+        options: [
+            { value: 0, text: "0 point : Aucune démarche qualité formalisée." },
+            { value: 1, text: "1 point : Démarche entamée pour certification ISO version 2000." },
+            { value: 2, text: "2 points : Certification ISO version 2000 obtenue." },
+            { value: 3, text: "3 points : Certification ISO + réelle démarche de Qualité Totale." }
+        ]
+    },
+    {
+        id: 'Q10.1.2',
+        label: "Comment les contraintes environnementales sont-elles intégrées ?",
+        sub_part: "LA CONDUITE DU PROGRES",
+        options: [
+            { value: 1, text: "1 point : Démarche entamée avec indicateurs visibles et impacts logistiques pris en compte." },
+            { value: 2, text: "2 points : Certification obtenue (ISO 14001 ou autre) mais sans effet sur la logistique." },
+            { value: 3, text: "3 points : Certification ISO 14000 + démarche stratégique globale (sans effet logistique direct)." }
+        ]
+    },
+    {
+        id: 'Q10.1.3',
+        label: "Quel est le plan de progrès logistique dans l'entreprise ?",
+        sub_part: "LA CONDUITE DU PROGRES",
+        options: [
+            { value: 1, text: "1 point : Actions logistiques spécifiques menées (stocks, flux, RH) avec résultats positifs." },
+            { value: 2, text: "2 points : Plan de progrès global Supply Chain avec responsable nommé et disponible." },
+            { value: 3, text: "3 points : Plan suivi (objectifs, dates, responsables) avec amélioration continue et indicateurs diffusés." }
+        ]
+    },
+    {
+        id: 'Q10.1.4',
+        label: "Quels sont les moyens pour garantir le pilotage du plan ?",
+        sub_part: "LA CONDUITE DU PROGRES",
+        options: [
+            { value: 1, text: "1 point : Responsable désigné et revue régulière par les opérationnels." },
+            { value: 2, text: "2 points : Comité de pilotage existant (fixation d'objectifs et contrôle)." },
+            { value: 3, text: "3 points : Processus clés contrôlés en comité ; reconnaissance des meilleurs résultats pour dépassement." }
+        ]
+    },
+    {
+        id: 'Q10.1.5',
+        label: "Comment l'ouverture aux évolutions technologiques est-elle assurée ?",
+        sub_part: "LA CONDUITE DU PROGRES",
+        options: [
+            { value: 1, text: "1 point : Encadrement invité informellement aux salons et conférences." },
+            { value: 2, text: "2 points : Participation régulière du personnel + veille via revues spécialisées." },
+            { value: 3, text: "3 points : Veille encouragée (adhésions, livres) + réunions internes de diffusion des connaissances." }
+        ]
+    },
+    {
+        id: 'Q10.1.6',
+        label: "Comment le service « méthodes logistiques » contribue-t-il au progrès ?",
+        sub_part: "LA CONDUITE DU PROGRES",
+        options: [
+            { value: 1, text: "1 point : Mise au point de gammes logistiques simplifiées pour les flux physiques." },
+            { value: 2, text: "2 points : Gammes précises couvrant tout le flux + analyse de performance pour amélioration." },
+            { value: 3, text: "3 points : Recherche permanente de réduction des temps (délais, rentabilité)." }
+        ]
+    },
+    {
+        id: 'Q10.1.7',
+        label: "Comment est mesurée l'efficacité de la politique générale ?",
+        sub_part: "LA CONDUITE DU PROGRES",
+        options: [
+            { value: 1, text: "1 point : Impacts (sécurité, formation, etc.) mesurés par des indicateurs appropriés." },
+            { value: 2, text: "2 points : La mesure contribue efficacement à la démarche de progrès (surtout formation)." },
+            { value: 3, text: "3 points : Diffusion des résultats + benchmark concurrentiel pour progresser." }
+        ]
+    },
+    {
+        id: 'Q10.1.8',
+        label: "Comment l'information sur la performance est-elle donnée ?",
+        sub_part: "LA CONDUITE DU PROGRES",
+        options: [
+            { value: 1, text: "1 point : Informations données en interne au moins une fois par mois." },
+            { value: 2, text: "2 points : Diffusion trimestrielle aux fournisseurs, prestataires et clients." },
+            { value: 3, text: "3 points : La communication est un levier majeur de progrès permanent." }
+        ]
+    },
+    {
+        id: 'Q10.1.9',
+        label: "Comment est organisée la communication avec l'extérieur ?",
+        sub_part: "LA CONDUITE DU PROGRES",
+        options: [
+            { value: 1, text: "1 point : Réclamations logistiques traitées avec soin et diffusées aux intéressés." },
+            { value: 2, text: "2 points : Consultation régulière des clients sur le service ; suivi des prestataires." },
+            { value: 3, text: "3 points : Réunions régulières avec les partenaires pour l'amélioration globale de la chaîne." }
+        ]
+    }
+],
+
+
+       };
+
+        let userAnswers = {}; // Stockage des réponses { questionId: value }
+	let chapterComments = {}; // Stockage des commentaires par chapitre
+
+
+        // --- NAVIGATION ---
+        function switchContent(id, el) {
+            document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active-content'));
+            document.getElementById(id).classList.add('active-content');
+            if(el) {
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                el.classList.add('active');
+            }
+            if(id === 'audit-content') prepareReport();
+        }
+
+        // --- LOGIQUE MÉTIER ---
+        function loadSubSectors(parentId, title) {
+            const list = document.getElementById('sub-sector-list');
+            document.getElementById('parent-sector-title').innerText = title;
+            list.innerHTML = "";
+            
+            const filtered = subSectorsData.filter(s => s.parentId === parentId);
+            if(filtered.length === 0) {
+                list.innerHTML = "<p>Aucun sous-secteur disponible pour le moment.</p>";
+            } else {
+                filtered.forEach(sub => {
+                    list.innerHTML += `
+                        <div class="sector-button" onclick="loadScoring(${sub.id}, '${sub.name}')">
+                            <div class="item-text"><strong>${sub.name}</strong><br><small>${sub.description}</small></div>
+                        </div>`;
+                });
+            }
+            switchContent('sub-sectors-content');
+        }
+
+        function loadScoring(subId, name) {
+            const container = document.getElementById('questions-container');
+            document.getElementById('current-sub-sector-name').innerText = name;
+            container.innerHTML = "";
+
+            const questions = scoringQuestions[subId] || [];
+            if(questions.length === 0) {
+                container.innerHTML = "<p>Questions en cours de rédaction...</p>";
+            } else {
+               let currentChapter = null;
+
+            questions.forEach((q, index) => {
+                // 1. Détection d'un nouveau chapitre (sub_part)
+                if (q.sub_part !== currentChapter) {
+                    
+                    // Si on change de chapitre, on ferme le précédent par une zone de commentaire
+                    if (currentChapter !== null) {
+                        container.innerHTML += `
+                            <div class="question-group" style="background:#f8f9fa;">
+                                <label><i class="fas fa-comment-dots"></i> Commentaire – ${currentChapter}</label>
+                                <textarea name="comment_${currentChapter}" rows="3" 
+                                    style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing: border-box;"
+                                    placeholder="Observations et recommandations...">${chapterComments[currentChapter] || ""}</textarea>
+                            </div>`;
+                    }
+
+                    // Affichage du nouveau titre de chapitre
+                    currentChapter = q.sub_part;
+                    container.innerHTML += `<h3 style="margin-top:30px; color:var(--primary-blue); border-left: 5px solid var(--primary-blue); padding-left:10px;">${currentChapter}</h3>`;
+                }
+
+                // 2. Génération de la question
+                let optionsHtml = q.options.map(o => `<option value="${o.value}">${o.text}</option>`).join('');
+                
+                container.innerHTML += `
+                    <div class="question-group">
+                        <label>${q.label}</label>
+                        <select name="${q.id}" required>
+                            <option value="" disabled selected>Choisissez le niveau de maturité...</option>
+                            ${optionsHtml}
+                        </select>
+                    </div>`;
+
+                // 3. Cas particulier : Si c'est la toute dernière question de la liste, on ajoute le dernier commentaire
+                if (index === questions.length - 1) {
+                    container.innerHTML += `
+                        <div class="question-group" style="background:#f8f9fa;">
+                            <label><i class="fas fa-comment-dots"></i> Commentaire – ${currentChapter}</label>
+                            <textarea name="comment_${currentChapter}" rows="3" 
+                                style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; box-sizing: border-box;"
+                                placeholder="Observations et recommandations...">${chapterComments[currentChapter] || ""}</textarea>
+                        </div>`;
+                }
+            });
+
+            // Gestion de la soumission du formulaire
+            document.getElementById('active-scoring-form').onsubmit = (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                let count = 0;
+
+                formData.forEach((val, key) => {
+                    if(key.startsWith('Q')) {
+                        userAnswers[key] = parseInt(val);
+                        count++;
+                    } else if(key.startsWith('comment_')) {
+                        let chapterName = key.replace('comment_', '');
+                        chapterComments[chapterName] = val;
+                    }
+                });
+
+                if(count > 0) {
+                    alert("Évaluation enregistrée avec succès !");
+                    switchContent('sub-sectors-content');
+                } else {
+                    alert("Veuillez répondre aux questions avant de valider.");
+                }
+            };
+            switchContent('scoring-form-page');
+        } // Fin de la fonction loadScoring
+
+            document.getElementById('active-scoring-form').onsubmit = (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                let count = 0;
+                formData.forEach((val, key) => {
+                    userAnswers[key] = parseInt(val);
+                    count++;
+                });
+                if(count > 0) {
+                    alert("Évaluation du secteur enregistrée !");
+                    switchContent('sub-sectors-content');
+                } else {
+                    alert("Veuillez répondre aux questions.");
+                }
+            };
+            switchContent('scoring-form-page');
+        }
+
+        // --- CALCUL DES RÉSULTATS ---
+        function prepareReport() {
+    const area = document.getElementById('final-results-area');
+    let globalPoints = 0;
+    let globalMax = 0;
+    let rowsHtml = "";
+    let commentsHtml = "";
+
+    auditResultsData.forEach(axe => {
+        let axePoints = 0;
+        let axeMax = 0;
+        const subs = subSectorsData.filter(s => s.parentId === axe.id);
+        
+        subs.forEach(sub => {
+            const qs = scoringQuestions[sub.id] || [];
+            qs.forEach(q => {
+                axeMax += 3;
+                if(userAnswers[q.id] !== undefined) {
+                    axePoints += userAnswers[q.id];
+                }
+            });
+        });
+
+        if(axeMax > 0) {
+            const pct = Math.round((axePoints / axeMax) * 100);
+            globalPoints += axePoints;
+            globalMax += axeMax;
+            
+            // Couleur dynamique selon le score
+            let color = pct < 50 ? "#dc3545" : (pct < 80 ? "#ffc107" : "#28a745");
+            
+            rowsHtml += `
+                <tr>
+                    <td>${axe.section}</td>
+                    <td style="color:${color}; font-weight:bold;">${pct}%</td>
+                </tr>`;
+        }
+    });
+
+    // Préparation de la section Commentaires/Préconisations
+    const activeComments = Object.entries(chapterComments).filter(([chapter, text]) => text.trim() !== "");
+    
+    if (activeComments.length > 0) {
+        commentsHtml = `<h3 style="margin-top:25px; border-bottom:2px solid var(--primary-blue);">Observations & Préconisations</h3>`;
+        activeComments.forEach(([chapter, text]) => {
+            commentsHtml += `
+                <div style="margin-bottom:15px; padding:10px; background:#f8f9fa; border-left:4px solid var(--tertiary-color);">
+                    <strong style="display:block; color:var(--primary-blue); margin-bottom:5px;">${chapter}</strong>
+                    <p style="margin:0; font-style:italic; font-size:0.95em;">"${text}"</p>
+                </div>`;
+        });
+    }
+
+    const totalPct = globalMax > 0 ? Math.round((globalPoints / globalMax) * 100) : 0;
+
+    area.innerHTML = `
+        <div class="score-display-card">
+            <p>SCORE GLOBAL DE MATURITÉ</p>
+            <h2 class="global-percentage">${totalPct}%</h2>
+        </div>
+        
+        <table class="result-table">
+            <thead>
+                <tr>
+                    <th>Axe Stratégique</th>
+                    <th>Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rowsHtml || '<tr><td colspan="2">Aucune donnée saisie.</td></tr>'}
+            </tbody>
+        </table>
+        
+        <div class="comments-section" style="text-align:left; margin-top:20px;">
+            ${commentsHtml}
+        </div>
+    `;
+}
+        // INITIALISATION
+        window.onload = () => {
+            const list = document.getElementById('main-sectors-list');
+            auditResultsData.forEach(s => {
+                list.innerHTML += `
+                    <div class="sector-button" onclick="loadSubSectors(${s.id}, '${s.section}')">
+                        <div class="item-number">${s.id}</div>
+                        <div class="item-text">${s.section}</div>
+                    </div>`;
+            });
+        };
+    </script>
+</body>
+</html>
